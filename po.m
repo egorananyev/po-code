@@ -4,10 +4,15 @@ function po
 
 % Current test variables:
 subj = 1001;
-domEye = 0; % 0=right, 1=left
+domEye = 1; % 0=right, 1=left
 condFileName = 'po-cond01';
+
+% Some default variables:
 nRevs = 10; % number of reversals for the staircases
- 
+gabPhase = 0; % pase of underlying sine grating in degrees
+sc = 5; % spatial constant of the exponential "hull"
+radius = 70; % for Gabor arrangement
+
 % Keyboard:
 KbName('UnifyKeyNames');
 quitkey = 'c';
@@ -43,14 +48,14 @@ screenid = max(Screen('Screens'));
 % PsychImaging('PrepareConfiguration'); 
 
 % Some verification for colour names (for the gratings):
-white = WhiteIndex(screenid);
-black = BlackIndex(screenid);
-gray = round((white+black)/2);
-if gray == white
-    gray = white / 2;
-end
-inc = white - gray; % increment
-backgroundCol = black;
+% white = WhiteIndex(screenid);
+% black = BlackIndex(screenid);
+% gray = round((white+black)/2);
+% if gray == white
+%     gray = white / 2;
+% end
+% inc = white - gray; % increment
+backgroundCol = 0;
 
 try
 [wPtr, rect] = Screen('OpenWindow', screenid, backgroundCol);
@@ -70,7 +75,7 @@ disp.boxColour = [255 255 255]; % white
 disp.boxSize = 90;
 disp.distX = 170; % 150; % display center distance from the vertical midline (left/right)
 disp.distY = -100; % display center distance from the horizontal midline (up)
-disp.centX(1:2) = [disp.resX/2-disp.distX disp.resX/2+disp.distX]; % 230(R) & 730(L)
+disp.centX(1:2) = [disp.resX/2-disp.distX disp.resX/2+disp.distX]; % 230(L) & 730(R)
 disp.centY = disp.resY/2 + disp.distY; % 540-200=340
 
 %Screen('CloseAll'); %temp
@@ -90,7 +95,7 @@ for i=1:numofConds
         'stepsizeup',c2n(condTable,'vcUp',i),...
         'stepsizedown',c2n(condTable,'vcDown',i),...
         'startvalue',c2n(condTable,'vcSt',i),...
-        'stopcriterion','reversals','stoprule',nRevs); %#ok<AGROW>
+        'stopcriterion','reversals','stoprule',nRevs);  %#ok<AGROW>
 end
 
 %% Presenting the instructins window.
@@ -131,7 +136,7 @@ while 1,
 end
 WaitSecs(0.5);
 
-%% Preparing the gratings and screen.
+%% Preparing the screen.
 
 % Run the movie animation for a fixed period.
 % curTrial = 5; %TEMP
@@ -146,6 +151,23 @@ end
 % Use realtime priority for better timing precision:
 priorityLevel=MaxPriority(wPtr);
 Priority(priorityLevel);
+
+
+%% Preparing the Mondrian files.
+mondFiles    = dir('mondrians/');
+mondFileIds  = find(~[mondFiles.isdir]);
+mondFileIds2 = mondFileIds;
+for k=1:length(mondFileIds) % some checks, I guess
+    if isempty(strfind(mondFiles(mondFileIds(k)).name, '.jpg')),
+        mondFileIds2(k) = [];
+    end
+end
+% This is the cell variable that contains all of the images (no need to
+% reopen the files on the fly):
+mondImg = cell(1,length(mondFileIds2));
+for k=1:length(mondFileIds2)
+    mondImg{k} = imread(['mondrians/' mondFiles(mondFileIds2(k)).name]);
+end
 
 %% Going through the staircases (running the trials).
 
@@ -176,91 +198,86 @@ for curTrial=1:numofStaircs
     singlCont = c2n(condTable,'singlCont',curStairc);
     display(['singleton type: ', singlType]);
     display(sprintf('singleton contrast: %.2f', singlCont));
-    % Randomly assigned vars:
-    gabOri = randi(2)-1; % 0=horizontal, 1=vertical
-    gabNum = c2n(condTable,'gabNum',curStairc);
-    singlLoc = randi(gabNum);
         
-    % Duration, mask, and grating settings:
+    % Duration and mask settings:
     stimT = c2n(condTable,'stimT',curStairc);
     postStimBlankT = c2n(condTable,'postStimBlankT',curStairc);
-    gabSize = c2n(condTable,'gabSize',curStairc);
-    gabSf = c2n(condTable,'gabSf',curStairc);
-    maskRR = c2n(condTable,'maskRR',curStairc);
     odtTilt = c2n(condTable,'odtTilt',curStairc);
     odtT = c2n(condTable,'odtT',curStairc);
+    maskRR = c2n(condTable,'maskRR',curStairc);
     
-    % Converting Gabor settings into pixels:
+    % Gabor settings:
+    gabNum = c2n(condTable,'gabNum',curStairc); % number of Gabors
+    gabSize = c2n(condTable,'gabSize',curStairc);
     gabSize = round(cm2px(gabSize, sdims));
-%     gabSf = round(cm2px(gabSf, sdims))*2*pi; % 0.0142 cy/px = .5 cy/cm
+    gabSf = c2n(condTable,'gabSf',curStairc);
+    
+    % Randomly assigned vars:
+    gabOri(1:gabNum) = repmat((randi(2)-1)*90, 1, gabNum); % 0=hori, 1=vert
+    singlLoc = randi(gabNum);
+    display(sprintf('singleton ID: %.2f', singlLoc));
+    primCol = randi(2); % 1=red, 2=green
+    
+    maxContr = staircs(curStairc).xCurrent; % current max contrast
+    display(sprintf('singleton brightness: %.2f', maxContr));
+
 
     %% Rendering the gratings:
     numFrames = round(stimT*frameRate/1000);
-    maxContr = staircs(curStairc).xCurrent; % current max contrast
-    for i = 1:numFrames
-        curContr = ( exp(-(-1+(2*i/numFrames))^2*4) )*maxContr;
-        m = renderGrating(gabSize, gabOri*90, .5, 0);
-        %         m = .75*m;
-%         m(m<0)=0;
-        m = m - m*.5;
-        display(sprintf('m min=%.2f; max=%.2f',min(min(m)),max(max(m))));
-        ftwindow = renderWindow(m, 1);
-%         im = gray + inc*m;
-%         im = white*m; % *curContr;
-%         display(sprintf('im min=%.2f; max=%.2f',min(min(im)),max(max(im))));
-        im = curContr*gray + curContr*inc*m;
-        im(im<0)=0;
-        display(sprintf('im min=%.2f; max=%.2f',min(min(im)),max(max(im))));
-%         gab(i) = Screen('MakeTexture', wPtr, ftwindow.*im ); %#ok<AGROW>
-        
-    end
 
-    %% Animation loop.
     % scale this patch up and down to draw individual patches of the different
     % wanted sizes:
-    si = 200;
-
+    si = gabSize; % 200;
     % Size of support in pixels, derived from si:
     tw = 2*si+1;
     th = 2*si+1;
 
-    % Initial parameters of gabors:
-
-    % Phase of underlying sine grating in degrees:
-    phase = 0;
-    % Spatial constant of the exponential "hull"
-    sc = 20.0;
-    % Frequency of sine grating:
-    freq = .1;
-    % Contrast of grating:
-    contrast = 20.0;
-    % Aspect ratio width vs. height:
-    aspectratio = 1.0;
     % Build a procedural gabor texture for a gabor with a support of tw x th
     % pixels and the 'nonsymetric' flag set to 1 == Gabor shall allow runtime
     % change of aspect-ratio:
-    rotAngles = 90;
     gab = CreateProceduralGabor(wPtr, tw, th, 1);
-    mypars = [phase+180, freq, sc, contrast, aspectratio, 0, 0, 0]';
-    Screen('DrawTexture', wPtr, gab, [], [], [], [], [], [], [], ...
-        kPsychDontDoRotation, [phase, freq, sc, contrast, aspectratio, 0, 0, 0]);
+    % The rectangles in which the Gabors will be drawn
     texrect = Screen('Rect', gab);
-%     dstRects = zeros(4);
-    dstRects(1:4) = CenterRectOnPoint(texrect, disp.centX(1), disp.centY)';
     
-    for i=1:numFrames %frameSet
-        % Draw the left image:
-%         boxMulti = 1; % 1.8;
-%         Screen('DrawTexture', wPtr, gab(i), [], ...
-%             [disp.centX(1)-disp.boxSize*boxMulti disp.centY-disp.boxSize*boxMulti ...
-%             disp.centX(1)+disp.boxSize*boxMulti disp.centY+disp.boxSize*boxMulti]);
-        Screen('DrawTextures', wPtr, gab, [], dstRects, rotAngles,...
-            [], [], [], [], kPsychDontDoRotation, mypars);
+    % Locations:
+    fiStep = 360/gabNum; % fi steps: 360/12 = 30 degrees
+    
+    % Cycling through Gabors to adjust the settings:
+    dstRects = zeros(gabNum,4);
+    gabCol = zeros(gabNum,3);
+    for curGabI = 1:gabNum
+        % The location for each Gabor (to the non-domEye):
+        dstRects(curGabI,:) = CenterRectOnPoint(texrect, ...
+            disp.centX(1+domEye) + radius*cosd(fiStep/2+curGabI*fiStep), ...
+            disp.centY + radius*sind(fiStep/2+curGabI*fiStep));
+        % Colours:
+        if singlLoc==curGabI
+            gabCol(curGabI,primCol) = 255;
+        else
+            gabCol(curGabI,1:2) = 255;
+            gabCol(curGabI,primCol) = 0;
+        end
+    end
+    
+    for i=1:numFrames
+        %% Animation loop for the priming stage.
+        % The contrast varies through the frames:
+        curContr = ( exp(-(-1+(2*i/numFrames))^2*4) )*maxContr*100;
+        % Cycling through the Gabors:
+        for curGabI = 1:gabNum
+            Screen('DrawTexture', wPtr, gab, [], dstRects(curGabI,:), ...
+                gabOri(curGabI),[], [], gabCol(curGabI,:), [], ...
+                kPsychDontDoRotation, [gabPhase, gabSf, sc, curContr, 1, 0, 0, 0]);
+        end
+        % Fixation boxes:
         drawFixationBox(wPtr, disp.centX(1), disp.centY, disp.boxSize, ...
-            disp.boxColour);
+            disp.boxColour); % left fixation box
+        drawFixationBox(wPtr, disp.centX(2), disp.centY, disp.boxSize, ...
+            disp.boxColour); % right fixation box
+        % Mask:
+        drawMondrians(mondImg{rem(i,10)}, wPtr, disp.centX(2-domEye), disp.centY, disp.boxSize);
         Screen('Flip', wPtr);
-
-        %% Monitoring for keypresses.
+        % Monitoring for keypresses.
         [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
         if keyIsDown,
             if keyCode(KbName(quitkey)),
