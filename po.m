@@ -16,7 +16,6 @@ radius = 70; % for Gabor arrangement
 % Keyboard:
 KbName('UnifyKeyNames');
 quitkey = 'c';
-space = 'space';
 % targetUsageName = 'Keyboard'; % change accordingly
 % targetProduct = 'Dell USB Keyboard'; % change accordingly
 % targetProduct = 'Apple Keyboard'; % temp
@@ -34,13 +33,15 @@ sessionName = strcat('po_', condFileName', '_s', mat2str(subj), ...
 outFileName = strcat('../po_data/', sessionName, '.csv');
 
 % Instructions text:
-textInstr = 'Press any button to continue';
+textTilt = 'Please indicate the tilt: <- / -> ';
+textVisibility = 'Press up for "visibille" and down for "invisible"';
+textInstr = 'Press any button to start';
 textNextTrial = 'Press spacebar to continue';
 
 %% Preparing PsychToolBox and screen.
 
 % Prepping PsychToolBox:
-Screen('Preference', 'SkipSyncTests', 1); % a necessary evil - only for Yosemite
+% Screen('Preference', 'SkipSyncTests', 1); % a necessary evil - only for Yosemite
 
 AssertOpenGL; % for 3D rendering 
 screenid = max(Screen('Screens'));
@@ -93,7 +94,7 @@ numofConds = size(condTable,1)-1; % number of conditions
 for i=1:numofConds
     staircs(i) = PAL_AMUD_setupUD('up',1,'down',1,...
         'stepsizeup',c2n(condTable,'vcUp',i),...
-        'stepsizedown',c2n(condTable,'vcDown',i),...
+        'stepsizedown',c2n(condTable,'vcDn',i),...
         'startvalue',c2n(condTable,'vcSt',i),...
         'stopcriterion','reversals','stoprule',nRevs);  %#ok<AGROW>
 end
@@ -109,12 +110,12 @@ boxR = [disp.centX(2)-disp.boxSize disp.centY-disp.boxSize...
 % Drawing the fixation box on the left:
 drawFixationBox(wPtr, disp.centX(1), disp.centY, disp.boxSize, disp.boxColour);
 % Drawing the text box centered in the left box:
-DrawFormattedText(wPtr, textInstr, 'center', 'center', [255 255 50], 15, ...
-    [], [], [], [], boxL)
+DrawFormattedText(wPtr, textInstr, 'center', 'center', [255 255 50], 14, ...
+    [], [], [], [], boxL);
 % Drawing the fixation and text boxes on the right:
 drawFixationBox(wPtr, disp.centX(2), disp.centY, disp.boxSize, disp.boxColour);
-DrawFormattedText(wPtr, textInstr, 'center', 'center', [255 255 50], 15, ...
-    [], [], [], [], boxR)
+DrawFormattedText(wPtr, textInstr, 'center', 'center', [255 255 50], 14, ...
+    [], [], [], [], boxR);
 Screen(wPtr, 'Flip');
 
 %% Monitoring for the key presses during the instruction:
@@ -139,7 +140,6 @@ WaitSecs(0.5);
 %% Preparing the screen.
 
 % Run the movie animation for a fixed period.
-% curTrial = 5; %TEMP
 frameRate=Screen('FrameRate',screenid);
 % If MacOSX does not know the frame rate the 'FrameRate' will return 0.
 % That usually means we run on a flat panel with 60 Hz fixed refresh
@@ -173,6 +173,7 @@ end
 
 % Making sure there are still staircases to complete:
 numofStaircs = numofConds;
+c = 0; % initiating trial counter:
 while numofStaircs>0 % while there are still staircs to complete
 
 % Random-shuffling the active (remaining) staircs:
@@ -185,65 +186,78 @@ display(sprintf('number of remaining staircases: %i', numofStaircs));
 
 % Screen('CloseAll'); %temp
 
-for curTrial=1:numofStaircs
+for blockTrial=1:numofStaircs
     %% Drawing the gratings for this trial.
+    c = c + 1; % trial counter
+    
+    % All of the trial-specific data are recorded in structure d.
     display('=====');
-    curStairc = trialCond(curTrial);
-    display(sprintf('current trial#: %3i', curTrial));
-    display(sprintf('current staircase: %i', curStairc));
-    display(sprintf('staircase start value: %.2f', c2n(condTable,'vcSt',curStairc)));
+    display(sprintf('current trial count#: %3i', c));
+    d.curStairc(c) = trialCond(blockTrial);
+    display(sprintf('current block trial#: %3i', blockTrial));
+    display(sprintf('current staircase: %i', d.curStairc(c)));
+    display(sprintf('staircase start value: %.2f', c2n(condTable,'vcSt',d.curStairc(c))));
     
     % Singleton config:
-    singlType = c2n(condTable,'singlType',curStairc);
-    singlCont = c2n(condTable,'singlCont',curStairc);
-    display(['singleton type: ', singlType]);
-    display(sprintf('singleton contrast: %.2f', singlCont));
+    d.singlType(c) = c2n(condTable,'singlType',d.curStairc(c));
+    d.singlCont(c) = c2n(condTable,'singlCont',d.curStairc(c)); % singlton contrast
+    display(['singleton type: ', d.singlType(c)]);
+    display(sprintf('singleton contrast: %.2f', d.singlCont(c)));
         
     % Duration and mask settings:
-    stimT = c2n(condTable,'stimT',curStairc);
-    postStimBlankT = c2n(condTable,'postStimBlankT',curStairc);
-    odtTilt = c2n(condTable,'odtTilt',curStairc);
-    odtT = c2n(condTable,'odtT',curStairc);
-    maskRR = c2n(condTable,'maskRR',curStairc);
+    d.jitTmax(c) = c2n(condTable,'jitTmax',d.curStairc(c));
+    d.stimT(c) = c2n(condTable,'stimT',d.curStairc(c));
+    d.postStimBlankT(c) = c2n(condTable,'postStimBlankT',d.curStairc(c));
+    d.odtTilt(c) = c2n(condTable,'odtTilt',d.curStairc(c));
+    d.odtT(c) = c2n(condTable,'odtT',d.curStairc(c));
+%     d.odtT(c) = 126;
+    d.maskRR(c) = c2n(condTable,'maskRR',d.curStairc(c));
     
     % Gabor settings:
-    gabNum = c2n(condTable,'gabNum',curStairc); % number of Gabors
-    gabSize = c2n(condTable,'gabSize',curStairc);
-    gabSize = round(cm2px(gabSize, sdims));
-    gabSf = c2n(condTable,'gabSf',curStairc);
+    d.gabNum(c) = c2n(condTable,'gabNum',d.curStairc(c)); % number of Gabors
+    d.gabSize(c) = c2n(condTable,'gabSize',d.curStairc(c));
+    d.gabSize(c) = round(cm2px(d.gabSize(c), sdims));
+    d.gabSf(c) = c2n(condTable,'gabSf',d.curStairc(c));
     
     %% Other variables.
     
     % Randomly assigned vars:
-    gabOri(1:gabNum) = repmat((randi(2)-1)*90, 1, gabNum); % 0=hori, 1=vert
-    singlLoc = randi(gabNum);
-    display(sprintf('singleton ID: %.2f', singlLoc));
-    primCol = randi(2); % 1=red, 2=green
+    d.gabOri(c,1:d.gabNum(c)) = repmat((randi(2)-1)*90, 1, d.gabNum(c)); % 0=hori, 1=vert
+    d.singlLoc(c) = randi(d.gabNum(c));
+    display(sprintf('singleton ID: %.2f', d.singlLoc(c)));
+    d.primCol(c) = randi(2); % 1=red, 2=green
+    d.odtLoc(c) = randi([0 d.gabNum(c)/2]); % same loc as prime, or opposite
+    d.odtOri(c) = randi([0 1]); % left and right, respectively
     
     % Timing vars:
-    stimFC = round(stimT*frameRate/1000);
-    postStimBlankFC = round(poastStimBlankT*frameRate/1000);
-    odtFC = round(odtT*frameRate/1000);
-    trialFC = stimFC+postStimBlankFC+odtFC;
+    d.jitFC(c) = randi(round(d.jitTmax(c)*frameRate/1000)); % random jitter
+    d.stimFC(c) = round(d.stimT(c)*frameRate/1000);
+    d.postStimBlankFC(c) = round(d.postStimBlankT(c)*frameRate/1000);
+    d.odtFC(c) = round(d.odtT(c)*frameRate/1000);
+    d.trialFC(c) = d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)+d.odtFC(c);
     
-    % Response variables:
-    respOdt = False;
-    respVis = False;
-    respConf = False;
+    % Resetting the response variables:
+    respMadeOdt = false;
+    respMadeVis = false;
+    respMadeCont = false;
+%     respMadeConf = false;
+%     d.respQuad(c) = false;
+    d.respOdt(c) = [];
+    d.respVis(c) = [];
     
     %% Rendering the gratings:
 
-    maxContr = staircs(curStairc).xCurrent; % current max contrast
-    display(sprintf('singleton brightness: %.2f', maxContr));
+    d.maxContr(c) = staircs(d.curStairc(c)).xCurrent; % current max contrast
+    display(sprintf('singleton brightness: %.2f', d.maxContr(c)));
     
     % scale this patch up and down to draw individual patches of the different
     % wanted sizes:
-    si = gabSize; % 200;
-    % Size of support in pixels, derived from si:
-    tw = 2*si+1;
-    th = 2*si+1;
+    d.si(c) = d.gabSize(c); % 200;
+    % Size of support in pixels, derived from d.si(c):
+    tw = 2*d.si(c)+1;
+    th = 2*d.si(c)+1;
 
-    % Build a procedural gabor texture for a gabor with a support of tw x th
+    % Build a procedural gabor texture for a gabor with a support of tw ~ th
     % pixels and the 'nonsymetric' flag set to 1 == Gabor shall allow runtime
     % change of aspect-ratio:
     gab = CreateProceduralGabor(wPtr, tw, th, 1);
@@ -251,79 +265,150 @@ for curTrial=1:numofStaircs
     texrect = Screen('Rect', gab);
     
     % Locations:
-    fiStep = 360/gabNum; % fi steps: 360/12 = 30 degrees
+    d.fiStep(c) = 360/d.gabNum(c); % fi steps: 360/12 = 30 degrees
     
     % Cycling through Gabors to adjust the settings:
-    dstRects = zeros(gabNum,4);
-    gabCol = zeros(gabNum,3);
-    for curGabI = 1:gabNum
+    dstRects = zeros(d.gabNum(c),4);
+    gabCol = zeros(d.gabNum(c),3);
+    for curGabI = 1:d.gabNum(c)
         % The location for each Gabor (to the non-domEye):
         dstRects(curGabI,:) = CenterRectOnPoint(texrect, ...
-            disp.centX(1+domEye) + radius*cosd(fiStep/2+curGabI*fiStep), ...
-            disp.centY + radius*sind(fiStep/2+curGabI*fiStep));
+            disp.centX(1+domEye) + radius*cosd(d.fiStep(c)/2+curGabI*d.fiStep(c)), ...
+            disp.centY + radius*sind(d.fiStep(c)/2+curGabI*d.fiStep(c)));
         % Colours:
-        if singlLoc==curGabI
-            gabCol(curGabI,primCol) = 255;
+        if d.singlLoc(c)==curGabI
+            gabCol(curGabI,d.primCol(c)) = 255;
         else
             gabCol(curGabI,1:2) = 255;
-            gabCol(curGabI,primCol) = 0;
+            gabCol(curGabI,d.primCol(c)) = 0;
         end
     end
     
-    for curFrame =1:stimFC
+    curFrame = 0; % (re)setting the current frame count
+    mondIndx = 1; % (re)assigning the mondrean index
+    while ~respMadeCont
         %% Animation loop.
+        curFrame = curFrame + 1;
         % 1. The priming stage.
-        if curFrame<=stimFC
-            The contrast varies through the frames:
-            curContr = ( exp(-(-1+(2*curFrame/stimFC))^2*4) )*maxContr*100;
+        if curFrame>d.jitFC(c) && curFrame<=d.stimFC(c)+d.jitFC(c)
+            % The contrast varies through the frames:
+            curContr = ( exp(-(-1+(2*curFrame/d.stimFC(c)))^2*4) )*d.maxContr(c)*100;
             % Cycling through the Gabors:
-            for curGabI = 1:gabNum
+            for curGabI = 1:d.gabNum(c)
                 Screen('DrawTexture', wPtr, gab, [], dstRects(curGabI,:), ...
-                    gabOri(curGabI),[], [], gabCol(curGabI,:), [], ...
-                    kPsychDontDoRotation, [gabPhase, gabSf, sc, curContr, 1, 0, 0, 0]);
+                    d.gabOri(c,curGabI),[], [], gabCol(curGabI,:), [], ...
+                    kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, curContr, 1, 0, 0, 0]);
             end
         end
         % 2. Post-stimulus blank.
         % Do nothing. The mask is still shown.
         % 3. Orientation-discrimination task stimulus presentation.
-        if curFrame>(stimFC+postStimBlankFC) && curFrame<=trialFC
-            % Define these:
-            odtOri % 0 or 1 for left and right, respectively
-            Screen('DrawTexture', wPtr, gab, [], dstRects(curGabI,:), ...
-                90+odtOffset-2*odtOri,[], [], [], [], ...
-                kPsychDontDoRotation, [gabPhase, gabSf, sc, 1, 1, 0, 0, 0]);
+%         [d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)]
+%         d.trialFC(c)
+%         curFrame
+%         curFrame>(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c))
+%         curFrame<=d.trialFC(c)
+        if curFrame>(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)) && curFrame<=d.trialFC(c)
+            % the below gabID computation is necessary for the index not to
+            % exceed the number of Gabors:
+            Screen('DrawTexture', wPtr, gab, [], ...
+                dstRects(d.singlLoc(c)+d.odtLoc(c)-d.gabNum(c)*floor((d.singlLoc(c)+d.odtLoc(c))/(d.gabNum(c)+1)),:), ...
+                90+d.odtTilt(c)-2*d.odtOri(c),[], [], [], [], ...
+                kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, 1, 1, 0, 0, 0]);
+            display('Image displayed')
         end
         %% Participant's responses.
         % 4a. Response: ODT tilt.
-        if curFrame>trialFC && ~respOdt
-            
-            respOdt = True;
+        if curFrame>d.trialFC(c) && ~respMadeOdt
+            % Displaying the "tilt" text:
+            DrawFormattedText(wPtr, textTilt, 'center', 'center', ...
+                [255 255 50], 14, [], [], [], [], boxL);
+            DrawFormattedText(wPtr, textTilt, 'center', 'center', ...
+                [255 255 50], 14, [], [], [], [], boxR);
+            % Monitoring for left/right ODT tilt responses.
+            [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
+            if keyIsDown,
+                if keyCode(KbName('leftarrow')),
+                    d.respOdt(c) = 1; % left arrow
+                    respMadeOdt = true;
+                    display('Response made: left tilt');
+                elseif keyCode(KbName('rightarrow')),
+                    d.respOdt(c) = 2; % right arrow
+                    respMadeOdt = true;
+                    display('Response made: right tilt');
+                end
+            end
         end
         % 4b. Response: visibility.
-        if respOdt && ~respVis
-            
-            respVis = True;
+        if respMadeOdt && ~respMadeVis
+            % Displaying the "visibility" text:
+            DrawFormattedText(wPtr, textVisibility, 'center', 'center', ...
+                [255 255 50], 15, [], [], [], [], boxL);
+            DrawFormattedText(wPtr, textVisibility, 'center', 'center', ...
+                [255 255 50], 15, [], [], [], [], boxR);
+            % Monitoring for up/down visibility responses.
+            [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
+            if keyIsDown,
+                if keyCode(KbName('uparrow'))
+                    d.respVis(c) = 1;
+                    respMadeVis = true;
+                    display('Response made: visible set of stimuli');
+                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), ...
+                        d.respVis(c));
+                elseif keyCode(KbName('downarrow'))
+                    d.respVis(c) = 0;
+                    respMadeVis = true;
+                    display('Response made: invisible set of stimuli');
+                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), ...
+                        d.respVis(c));
+                end
+            end
         end
-        % 4c. Response: quadrants.
-        if respVis && ~respQuad
-            
-            respQuad = True;
-        end
-        % 4d. Response: confidence.
-        if respQuad && ~respConf
-            
-            respConf = True;
+%         % 4c. Response: quadrants.
+%         if respMadeVis && ~respMadeQuad
+%             
+%             respMadeQuad = true;
+%         end
+%         % 4d. Response: confidence.
+%         if respMadeQuad && ~respMadeConf
+%             
+%             respMadeConf = true;
+%         end
+        % 4e. Response: continue.
+        if respMadeVis && ~respMadeCont
+            % Displaying the "continue" text:
+            DrawFormattedText(wPtr, textNextTrial, 'center', 'center', ...
+                [255 255 50], 14, [], [], [], [], boxL);
+            DrawFormattedText(wPtr, textNextTrial, 'center', 'center', ...
+                [255 255 50], 14, [], [], [], [], boxR);
+            % Monitoring for a "space" press:
+            [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
+            if keyIsDown,
+                if keyCode(KbName('space'))
+                    respMadeCont = true;
+                    display('Response made: continuing to next trial');
+                    
+                    display('Data recorded');
+                end
+            end
         end
         %% Tail
         % Trial termination, when the confidence response is made.
-        if respConf
+        if respMadeCont
             
-            % Recording the responses.
         end
         % Mask:
-        if curFrame<=(stimFC+postStimBlankFC)
-            drawMondrians(mondImg{rem(curFrame,10)}, wPtr, disp.centX(2-domEye), ...
-                disp.centY, disp.boxSize);
+        if curFrame<=(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c))
+            % Alternating frequency is set by maskRR (refresh rate):
+            if rem(curFrame,d.maskRR(c))==0
+                mondIndx = mondIndx + 1;
+                if rem(curFrame,d.maskRR(c)*length(mondFileIds2))==0
+                    mondIndx = 1;
+                end
+            end
+            % Drawing the mask based on the Mondrean index:
+            drawMondrians(mondImg{mondIndx}, wPtr, ...
+                disp.centX(2-domEye), disp.centY, disp.boxSize);
         end
         % Fixation boxes:
         drawFixationBox(wPtr, disp.centX(1), disp.centY, disp.boxSize, ...
@@ -331,7 +416,7 @@ for curTrial=1:numofStaircs
         drawFixationBox(wPtr, disp.centX(2), disp.centY, disp.boxSize, ...
             disp.boxColour); % right fixation box
         Screen('Flip', wPtr);
-        % Monitoring for keypresses.
+        % Monitoring for the "quit key" press.
         [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
         if keyIsDown,
             if keyCode(KbName(quitkey)),
@@ -341,35 +426,6 @@ for curTrial=1:numofStaircs
             end
         end
     end
-    
-    %% Continue screen.
-    % Drawing the fixation box on the left:
-    drawFixationBox(wPtr, disp.centX(1), disp.centY, disp.boxSize, disp.boxColour);
-    % Drawing the text box centered in the left box:
-    DrawFormattedText(wPtr, textNextTrial, 'center', 'center', [255 255 50], 15, ...
-        [], [], [], [], boxL)
-    % Drawing the fixation and text boxes on the right:
-    drawFixationBox(wPtr, disp.centX(2), disp.centY, disp.boxSize, disp.boxColour);
-    DrawFormattedText(wPtr, textNextTrial, 'center', 'center', [255 255 50], 15, ...
-        [], [], [], [], boxR)
-    Screen(wPtr, 'Flip');
-    % Monitoring for a keypress:
-    while 1,
-        [keyIsDown, ~, keyCode] = KbCheck(deviceIndex); % not sure if this is the
-            % ... optimal command in terms of waiting.
-        if keyIsDown,
-            % If the 'quit' key is pressed, quit:
-            if keyCode(KbName(quitkey)),
-                Screen('CloseAll');
-                ShowCursor;
-                return;
-            elseif keyCode(KbName(space)),
-            % If the 'space' key is pressed, proceed to the next trial:
-                break;
-            end
-        end
-    end
-
 end
 
 % Updating the number of remaining staircs for the while loop:
