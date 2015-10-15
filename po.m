@@ -212,19 +212,30 @@ for curTrial=1:numofStaircs
     gabSize = round(cm2px(gabSize, sdims));
     gabSf = c2n(condTable,'gabSf',curStairc);
     
+    %% Other variables.
+    
     % Randomly assigned vars:
     gabOri(1:gabNum) = repmat((randi(2)-1)*90, 1, gabNum); % 0=hori, 1=vert
     singlLoc = randi(gabNum);
     display(sprintf('singleton ID: %.2f', singlLoc));
     primCol = randi(2); % 1=red, 2=green
     
+    % Timing vars:
+    stimFC = round(stimT*frameRate/1000);
+    postStimBlankFC = round(poastStimBlankT*frameRate/1000);
+    odtFC = round(odtT*frameRate/1000);
+    trialFC = stimFC+postStimBlankFC+odtFC;
+    
+    % Response variables:
+    respOdt = False;
+    respVis = False;
+    respConf = False;
+    
+    %% Rendering the gratings:
+
     maxContr = staircs(curStairc).xCurrent; % current max contrast
     display(sprintf('singleton brightness: %.2f', maxContr));
-
-
-    %% Rendering the gratings:
-    numFrames = round(stimT*frameRate/1000);
-
+    
     % scale this patch up and down to draw individual patches of the different
     % wanted sizes:
     si = gabSize; % 200;
@@ -259,23 +270,66 @@ for curTrial=1:numofStaircs
         end
     end
     
-    for i=1:numFrames
-        %% Animation loop for the priming stage.
-        % The contrast varies through the frames:
-        curContr = ( exp(-(-1+(2*i/numFrames))^2*4) )*maxContr*100;
-        % Cycling through the Gabors:
-        for curGabI = 1:gabNum
+    for curFrame =1:stimFC
+        %% Animation loop.
+        % 1. The priming stage.
+        if curFrame<=stimFC
+            The contrast varies through the frames:
+            curContr = ( exp(-(-1+(2*curFrame/stimFC))^2*4) )*maxContr*100;
+            % Cycling through the Gabors:
+            for curGabI = 1:gabNum
+                Screen('DrawTexture', wPtr, gab, [], dstRects(curGabI,:), ...
+                    gabOri(curGabI),[], [], gabCol(curGabI,:), [], ...
+                    kPsychDontDoRotation, [gabPhase, gabSf, sc, curContr, 1, 0, 0, 0]);
+            end
+        end
+        % 2. Post-stimulus blank.
+        % Do nothing. The mask is still shown.
+        % 3. Orientation-discrimination task stimulus presentation.
+        if curFrame>(stimFC+postStimBlankFC) && curFrame<=trialFC
+            % Define these:
+            odtOri % 0 or 1 for left and right, respectively
             Screen('DrawTexture', wPtr, gab, [], dstRects(curGabI,:), ...
-                gabOri(curGabI),[], [], gabCol(curGabI,:), [], ...
-                kPsychDontDoRotation, [gabPhase, gabSf, sc, curContr, 1, 0, 0, 0]);
+                90+odtOffset-2*odtOri,[], [], [], [], ...
+                kPsychDontDoRotation, [gabPhase, gabSf, sc, 1, 1, 0, 0, 0]);
+        end
+        %% Participant's responses.
+        % 4a. Response: ODT tilt.
+        if curFrame>trialFC && ~respOdt
+            
+            respOdt = True;
+        end
+        % 4b. Response: visibility.
+        if respOdt && ~respVis
+            
+            respVis = True;
+        end
+        % 4c. Response: quadrants.
+        if respVis && ~respQuad
+            
+            respQuad = True;
+        end
+        % 4d. Response: confidence.
+        if respQuad && ~respConf
+            
+            respConf = True;
+        end
+        %% Tail
+        % Trial termination, when the confidence response is made.
+        if respConf
+            
+            % Recording the responses.
+        end
+        % Mask:
+        if curFrame<=(stimFC+postStimBlankFC)
+            drawMondrians(mondImg{rem(curFrame,10)}, wPtr, disp.centX(2-domEye), ...
+                disp.centY, disp.boxSize);
         end
         % Fixation boxes:
         drawFixationBox(wPtr, disp.centX(1), disp.centY, disp.boxSize, ...
             disp.boxColour); % left fixation box
         drawFixationBox(wPtr, disp.centX(2), disp.centY, disp.boxSize, ...
             disp.boxColour); % right fixation box
-        % Mask:
-        drawMondrians(mondImg{rem(i,10)}, wPtr, disp.centX(2-domEye), disp.centY, disp.boxSize);
         Screen('Flip', wPtr);
         % Monitoring for keypresses.
         [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
