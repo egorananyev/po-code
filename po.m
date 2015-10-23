@@ -5,14 +5,14 @@ function po
 % Current test variables:
 subj = 1001;
 domEye = 1; % 0=right, 1=left
-condFileName = 'po-cond01';
+condFileName = 'po-cond01-test';
 
 % Some default variables:
 nRevs = 10; % number of reversals for the staircases
 gabPhase = 0; % pase of underlying sine grating in degrees
 sc = 5; % spatial constant of the exponential "hull"
 radius = 70; % for Gabor arrangement
-feedbackFC = 15; % the number of frames for feedback
+feedbackFC = 5; % the number of frames for feedback
 
 % Keyboard:
 KbName('UnifyKeyNames');
@@ -34,9 +34,17 @@ sessionName = strcat(condFileName, '_s', mat2str(subj), ...
 outFileName = strcat('../po-data/', sessionName);
 
 % Instructions text:
-textTilt = 'Please indicate the tilt: <- / -> ';
-textObjVis = 'Press up for "present" and down for "absent"';
+textTilt = 'Please indicate\nthe tilt:\n<- (left)\n-> (right)'; % 4 lines
+textTiltFdbLeft = ' \n \n \n<- (left)\n ';
+textTiltFdbRight = ' \n \n \n \n-> (right)';
+textObjVis = 'The "circles" were:\npresent (up)\nabsent (down)';
+textObjVisFdbPres = ' \n \n \npresent (up)\n ';
+textObjVisFdbAbs = ' \n \n \n \nabsent (down)';
 textSubjVis = '1. no experience\n2. brief glimpse\n3. almost clear\n4. clear experience';
+textSubjVisFdb1 = '1. no experience\n \n \n ';
+textSubjVisFdb2 = ' \n2. brief glimpse\n \n ';
+textSubjVisFdb3 = ' \n \n3. almost clear\n ';
+textSubjVisFdb4 = ' \n \n \n4. clear experience';
 textInstr = 'Press any button to start';
 textNextTrial = 'Press spacebar to continue';
 
@@ -44,6 +52,7 @@ textNextTrial = 'Press spacebar to continue';
 
 % Prepping PsychToolBox:
 Screen('Preference', 'SkipSyncTests', 1); % a necessary evil - only for Yosemite
+Screen('Preference', 'SuppressAllWarnings', 1);
 
 AssertOpenGL; % for 3D rendering 
 screenid = max(Screen('Screens'));
@@ -93,13 +102,21 @@ numofConds = size(condTable,1)-1; % number of conditions
 [~,~,sdims] = xlsread('screenDims.xlsx');
 
 % Setting up the staircases.
-for i=1:numofConds
+for i=1:(numofConds-1)
     staircs(i) = PAL_AMUD_setupUD('up',1,'down',1,...
         'stepsizeup',c2n(condTable,'vcUp',i),...
         'stepsizedown',c2n(condTable,'vcDn',i),...
         'startvalue',c2n(condTable,'vcSt',i),...
+        'xMin',0,'xMax',2,...
         'stopcriterion','reversals','stoprule',nRevs);  %#ok<AGROW>
 end
+% Setting up an additional staircase with blank trials
+staircs(numofConds) = PAL_AMUD_setupUD('up',1,'down',1,...
+    'stepsizeup',c2n(condTable,'vcUp',numofConds),...
+    'stepsizedown',c2n(condTable,'vcDn',numofConds),...
+    'startvalue',c2n(condTable,'vcSt',numofConds),...
+    'xMin',0,'xMax',c2n(condTable,'vcSt',numofConds),...
+    'stopcriterion','reversals','stoprule',nRevs);
 
 %% Presenting the instructins window.
 Screen('TextFont', wPtr, 'Cambria');
@@ -180,7 +197,7 @@ fc = 0; % frame counter for feedback
 while numofStaircs>0 % while there are still staircs to complete
 
 % Random-shuffling the active (remaining) staircs:
-activeStaircIndcs = find([staircs.reversal]<10);
+activeStaircIndcs = find([staircs.reversal]<nRevs);
 trialCond = activeStaircIndcs(randperm(numofStaircs));
 
 % Some info on this iteration of staircs:
@@ -256,7 +273,16 @@ for blockTrial=1:numofStaircs
     %% Rendering the gratings:
 
     d.maxContr(c) = staircs(d.curStairc(c)).xCurrent; % current max contrast
-    display(sprintf('singleton brightness: %.2f', d.maxContr(c)));
+    display(sprintf('stairscase value: %.2f', d.maxContr(c)));
+    % based on the above staircase value, setting the mask contrast:
+    if d.maxContr(c) <= 1
+        d.maskContr(c) = 1;
+    else
+        d.maskContr(c) = 2-d.maxContr(c);
+        d.maxContr(c) = 1;
+    end
+    display(sprintf('stimulus visual contrast: %.2f', d.maxContr(c)));
+    display(sprintf('mask visual contrast: %.2f', d.maskContr(c)));
     
     % scale this patch up and down to draw individual patches of the different
     % wanted sizes:
@@ -284,9 +310,10 @@ for blockTrial=1:numofStaircs
             disp.centX(1+domEye) + radius*cosd(d.fiStep(c)/2+curGabI*d.fiStep(c)), ...
             disp.centY + radius*sind(d.fiStep(c)/2+curGabI*d.fiStep(c)));
         % Colours:
-        if d.singlLoc(c)==curGabI
-            gabCol(curGabI,d.primCol(c)) = 255;
-        else
+        if d.singlLoc(c)==curGabI % for the outlier
+            gabCol(curGabI,1:2) = 255*(1-d.singlCont(c));
+            gabCol(curGabI,d.primCol(c)) = 255*d.singlCont(c);
+        else % for Gabors other than the outlier
             gabCol(curGabI,1:2) = 255;
             gabCol(curGabI,d.primCol(c)) = 0;
         end
@@ -364,7 +391,6 @@ for blockTrial=1:numofStaircs
                 dstRects(d.singlLoc(c)+d.odtLoc(c)-d.gabNum(c)*floor((d.singlLoc(c)+d.odtLoc(c))/(d.gabNum(c)+1)),:), ...
                 90+d.odtTilt(c)-2*d.odtOri(c),[], [], [], [], ...
                 kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, 1, 1, 0, 0, 0]);
-            display('ODT image displayed')
         end
         %% Participant's responses.
         % 4a. Response: ODT tilt.
@@ -391,17 +417,16 @@ for blockTrial=1:numofStaircs
         end
         % Response feedback.
         if respMadeOdt && ~respFeedbackOdt
-            display('in the response loop');
             fc = fc + 1;
             if d.respOdt(c) == 1
-                DrawFormattedText(wPtr, 'left tilt\n(<-)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textTiltFdbLeft, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, 'left tilt\n(<-)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textTiltFdbLeft, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxR);
             else
-                DrawFormattedText(wPtr, 'right tilt\n(->)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textTiltFdbRight, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, 'right tilt\n(->)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textTiltFdbRight, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxR);
             end
             if fc >= feedbackFC, respFeedbackOdt = true; fc=0; end
@@ -430,17 +455,16 @@ for blockTrial=1:numofStaircs
         end
         % Response feedback.
         if respMadeObjVis && ~respFeedbackObjVis
-            display('in the response loop');
             fc = fc + 1;
             if d.respObjVis(c) == 1
-                DrawFormattedText(wPtr, 'present (up)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textObjVisFdbPres, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, 'present (up)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textObjVisFdbPres, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxR);
             else
-                DrawFormattedText(wPtr, 'absent (down)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textObjVisFdbAbs, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, 'absent (down)', 'center', 'center', ...
+                DrawFormattedText(wPtr, textObjVisFdbAbs, 'center', 'center', ...
                     [255 255 50], 14, [], [], [], [], boxR);
             end
             if fc >= feedbackFC, respFeedbackObjVis = true; fc=0; end
@@ -460,49 +484,71 @@ for blockTrial=1:numofStaircs
                     d.respSubjVis(c) = 1;
                     respMadeSubjVis = true;
                     display('Response made: subjective visibility score 1');
+                    % Only update the response here if this is non-blank staircase:
+                    if d.curStairc(c)<numofConds
                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+                    end
                 elseif keyCode(KbName('2@'))
                     d.respSubjVis(c) = 2;
                     respMadeSubjVis = true;
                     display('Response made: subjective visibility score 2');
+                    if d.curStairc(c)<numofConds
                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    end
                 elseif keyCode(KbName('3#'))
                     d.respSubjVis(c) = 3;
                     respMadeSubjVis = true;
                     display('Response made: subjective visibility score 3');
+                    if d.curStairc(c)<numofConds
                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    end
                 elseif keyCode(KbName('4$'))
                     d.respSubjVis(c) = 4;
                     respMadeSubjVis = true;
                     display('Response made: subjective visibility score 4');
+                    if d.curStairc(c)<numofConds
                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    end
+                end
+                % If the staircase is the blank one, overwrite the above response with...
+                if respMadeSubjVis && d.curStairc(c)==numofConds
+                    % If no response has been made yet, or previous response was zero...
+                    allresps = staircs(d.curStairc(c)).response;
+                    if isempty(staircs(d.curStairc(c)).response) %|| ...
+                        %staircs(d.curStairc(c)).response(end) == 0
+                    % ...artificially "reverse" the staircase:
+                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    elseif allresps(end) == 0
+                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    else
+                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+                    end
                 end
             end
         end
         % Response feedback.
         if respMadeSubjVis && ~respFeedbackSubjVis
-            display('in the response loop');
             fc = fc + 1;
             if d.respSubjVis(c) == 1
-                DrawFormattedText(wPtr, '(1) no experience', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, '(1) no experience', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxR);
+                DrawFormattedText(wPtr, textSubjVisFdb1, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, textSubjVisFdb1, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxR);
             elseif d.respSubjVis(c) == 2
-                DrawFormattedText(wPtr, '(2) brief glimpse', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, '(2) brief glimpse', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxR);
+                DrawFormattedText(wPtr, textSubjVisFdb2, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, textSubjVisFdb2, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxR);
             elseif d.respSubjVis(c) == 3
-                DrawFormattedText(wPtr, '(3) almost clear', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, '(3) almost clear', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxR);
+                DrawFormattedText(wPtr, textSubjVisFdb3, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, textSubjVisFdb3, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxR);
             else
-                DrawFormattedText(wPtr, '(4) clear experience', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, '(4) clear experience', 'center', 'center', ...
-                    [255 255 50], 14, [], [], [], [], boxR);
+                DrawFormattedText(wPtr, textSubjVisFdb4, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, textSubjVisFdb4, 'center', 'center', ...
+                    [255 255 50], 20, [], [], [], [], boxR);
             end
             if fc >= feedbackFC, respFeedbackSubjVis = true; fc=0; end
         end
@@ -544,7 +590,7 @@ for blockTrial=1:numofStaircs
             end
             % Drawing the mask based on the Mondrean index:
             drawMondrians(mondImg{mondIndx}, wPtr, ...
-                disp.centX(2-domEye), disp.centY, disp.boxSize);
+                disp.centX(2-domEye), disp.centY, disp.boxSize, d.maskContr(c));
         end
         % Fixation boxes:
         drawFixationBox(wPtr, disp.centX(1), disp.centY, disp.boxSize, ...
@@ -565,7 +611,11 @@ for blockTrial=1:numofStaircs
 end
 
 % Updating the number of remaining staircs for the while loop:
-numofStaircs = sum([staircs.reversal]<nRevs);
+revs = zeros(1, size(staircs,2));
+for i = 1:size(staircs,2)
+    revs(i) = max(staircs(i).reversal);
+end
+numofStaircs = sum(revs<nRevs);
 
 end
 
