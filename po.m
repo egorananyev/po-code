@@ -8,7 +8,7 @@ domEye = 0; % 0=right, 1=left
 condFileName = 'po-cond01-test';
 
 % Some default variables:
-nRevs = 10; % number of reversals for the staircases
+nRevs = 1; % number of reversals for the staircases
 gabPhase = 0; % pase of underlying sine grating in degrees
 sc = 5; % spatial constant of the exponential "hull"
 radius = 70; % for Gabor arrangement
@@ -55,7 +55,7 @@ textNextTrial = 'Press spacebar\nto continue';
 
 % Prepping PsychToolBox:
 % Screen('Preference', 'SkipSyncTests', 1); % a necessary evil - only for Yosemite
-Screen('Preference', 'SuppressAllWarnings', 1);
+% Screen('Preference', 'SuppressAllWarnings', 1);
 
 AssertOpenGL; % for 3D rendering 
 screenid = max(Screen('Screens'));
@@ -106,21 +106,32 @@ numofConds = size(condTable,1)-1; % number of conditions
 [~,~,sdims] = xlsread('screenDims.xlsx');
 
 % Setting up the staircases.
+% alphas = 0:.005:2;
 for i=1:(numofConds-1)
-    staircs(i) = PAL_AMUD_setupUD('up',1,'down',1,...
-        'stepsizeup',c2n(condTable,'vcUp',i),...
-        'stepsizedown',c2n(condTable,'vcDn',i),...
-        'startvalue',c2n(condTable,'vcSt',i),...
-        'xMin',0,'xMax',2,...
-        'stopcriterion','reversals','stoprule',nRevs); %#ok<*AGROW>
+%     staircs(i) = PAL_AMUD_setupUD('up',1,'down',1,...
+%         'stepsizeup',c2n(condTable,'vcUp',i),...
+%         'stepsizedown',c2n(condTable,'vcDn',i),...
+%         'startvalue',c2n(condTable,'vcSt',i),...
+%         'xMin',0,'xMax',2,...
+%         'stopcriterion','reversals','stoprule',nRevs); %#ok<*AGROW>
+%    priorMean = c2n(condTable,'vcSt',i);
+%    prior = PAL_pdfNormal(alphas, priorMean, .5);
+    staircs(i) = PAL_AMRF_setupRF('xMin',0,'xMax',2,...
+        'stopCriterion','reversals','stopRule',nRevs); %#ok<*AGROW>
+%         'priorAlphaRange', alphas, 'prior', prior,...
+%         'startValue',c2n(condTable,'vcSt',i),...
 end
 % Setting up an additional staircase with blank trials
-staircs(numofConds) = PAL_AMUD_setupUD('up',1,'down',1,...
-    'stepsizeup',c2n(condTable,'vcUp',numofConds),...
-    'stepsizedown',c2n(condTable,'vcDn',numofConds),...
-    'startvalue',c2n(condTable,'vcSt',numofConds),...
-    'xMin',0,'xMax',c2n(condTable,'vcSt',numofConds),...
-    'stopcriterion','reversals','stoprule',nRevs);
+% staircs(numofConds) = PAL_AMUD_setupUD('up',1,'down',1,...
+%     'stepsizeup',c2n(condTable,'vcUp',numofConds),...
+%     'stepsizedown',c2n(condTable,'vcDn',numofConds),...
+%     'startvalue',c2n(condTable,'vcSt',numofConds),...
+%     'xMin',0,'xMax',c2n(condTable,'vcSt',numofConds),...
+%     'stopcriterion','reversals','stoprule',nRevs);
+staircs(numofConds) = PAL_AMRF_setupRF('xMin',0,'xMax',0.001,...
+    'priorAlphaRange', [0 0.001],...
+    'stopCriterion','reversals','stopRule',nRevs);
+%     'startValue',c2n(condTable,'vcSt',i),...
 
 %% Presenting the instructins window.
 Screen('TextFont', wPtr, 'Cambria');
@@ -203,15 +214,18 @@ end
 
 % Making sure there are still staircases to complete:
 numofStaircs = numofConds;
+numofStops = 0; % the starting number of staircase stop = 0
 c = 0; % initiating trial counter:
 fc = 0; % frame counter for feedback
 bc = 0; % block counter
-while numofStaircs>0 % while there are still staircs to complete
+%while numofStops<numofConds % while there are still staircs to complete
+while numofStaircs > 0
 
 bc = bc + 1; % block counter
 
 % Random-shuffling the active (remaining) staircs:
-activeStaircIndcs = find([staircs.reversal]<nRevs);
+% activeStaircIndcs = find([staircs.reversal]<nRevs);
+activeStaircIndcs = find([staircs.stop]==0);
 trialCond = activeStaircIndcs(randperm(numofStaircs));
 
 % Some info on this iteration of staircs:
@@ -300,15 +314,23 @@ for blockTrial=1:numofStaircs
     
     %% Rendering the gratings:
 
-    d.maxContr(c) = staircs(d.curStairc(c)).xCurrent; % current max contrast
-    display(sprintf('stairscase value: %.3f', d.maxContr(c)));
+%    d.maxContr(c) = staircs(d.curStairc(c)).xCurrent; % current max contrast
+    d.staircVal(c) = staircs(d.curStairc(c)).xCurrent; % current staircase value
+    display(sprintf('stairscase value: %.3f', d.staircVal(c)));
     % based on the above staircase value, setting the mask contrast:
-    if d.maxContr(c) <= 1
+    if d.staircVal(c) <= 1
         d.maskContr(c) = 1;
+        if d.staircVal(c) < 0
+            d.maxContr(c) = 0;
+        else
+            d.maxContr(c) = d.staircVal(c);
+        end
     else
-        d.maskContr(c) = 2-d.maxContr(c);
+        d.maskContr(c) = 2-d.staircVal(c);
         d.maxContr(c) = 1;
     end
+    % If this is a blank trial:
+    if d.curStairc(c)==numofConds, d.maxContr(c) = 0; d.maskContr(c) = 1; end
     display(sprintf('stimulus visual contrast: %.3f', d.maxContr(c)));
     display(sprintf('mask visual contrast: %.2f', d.maskContr(c)));
     
@@ -518,7 +540,9 @@ for blockTrial=1:numofStaircs
                     % Only update the response here if this is a non-blank staircase:
                     if d.curStairc(c)<numofConds
                     display('Non-blank trial: Recording "unseen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+%                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
+                        d.staircVal(c), 0);
                     end
                 elseif keyCode(KbName('2@'))
                     d.respSubjVis(c) = 2;
@@ -526,7 +550,9 @@ for blockTrial=1:numofStaircs
                     display('Response made: subjective visibility score 2');
                     if d.curStairc(c)<numofConds
                     display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+%                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
+                        d.staircVal(c), 1);
                     end
                 elseif keyCode(KbName('3#'))
                     d.respSubjVis(c) = 3;
@@ -534,7 +560,9 @@ for blockTrial=1:numofStaircs
                     display('Response made: subjective visibility score 3');
                     if d.curStairc(c)<numofConds
                     display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+%                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
+                        d.staircVal(c), 1);
                     end
                 elseif keyCode(KbName('4$'))
                     d.respSubjVis(c) = 4;
@@ -542,7 +570,9 @@ for blockTrial=1:numofStaircs
                     display('Response made: subjective visibility score 4');
                     if d.curStairc(c)<numofConds
                     display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+%                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
+                        d.staircVal(c), 1);
                     end
                 end
                 % If the staircase is the blank one, overwrite the above response with...
@@ -554,13 +584,16 @@ for blockTrial=1:numofStaircs
                         %staircs(d.curStairc(c)).response(end) == 0
                     % ...artificially "reverse" the staircase:
                     display('Blank trial: "seen" (artificial) iteration');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+%                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), 0, 1);
                     elseif allresps(end) == 0
                     display('Blank trial: "seen" (artificial) iteration');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+%                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), 0, 1);
                     elseif allresps(end) == 1
                     display('Blank trial: "unseen" (artificial) iteration');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+%                     staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), 0, 0);
                     end
                 end
             end
@@ -592,7 +625,7 @@ for blockTrial=1:numofStaircs
             if fc >= feedbackFC
                 respFeedbackSubjVis = true;
                 fc=0;
-                curRevs = staircs(d.curStairc(c)).reversal
+                curRevs = staircs(d.curStairc(c)).reversal;
                 d.revs(c) = curRevs(end);
             end
         end
@@ -608,6 +641,7 @@ for blockTrial=1:numofStaircs
             [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
             if keyIsDown,
                 if keyCode(KbName('space'))
+                    Screen('Close'); % for optimization
                     respMadeCont = true;
                     display('Response made: continuing to next trial');
                     % Data recording.
@@ -648,6 +682,7 @@ for blockTrial=1:numofStaircs
             disp.boxColour); % left fixation box
         drawFixationBox(wPtr, disp.centX(2), disp.centY, disp.boxSize, ...
             disp.boxColour); % right fixation box
+        Screen('DrawingFinished', wPtr); % an optimization bit
         Screen('Flip', wPtr);
         % Monitoring for the "quit key" press.
         [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
@@ -662,11 +697,13 @@ for blockTrial=1:numofStaircs
 end
 
 % Updating the number of remaining staircs for the while loop:
-revs = zeros(1, size(staircs,2));
-for i = 1:size(staircs,2)
-    revs(i) = max(staircs(i).reversal);
-end
-numofStaircs = sum(revs<nRevs);
+% revs = zeros(1, size(staircs,2));
+% for i = 1:size(staircs,2)
+    % revs(i) = max(staircs(i).reversal);
+% end
+% numofStaircs = sum(revs<nRevs);
+numofStops = sum([staircs.stop]);
+numofStaircs = numofConds - numofStops;
 
 end
 
