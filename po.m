@@ -8,7 +8,7 @@ domEye = 0; % 0=right, 1=left
 condFileName = 'po-cond01';
 
 % Some default variables:
-nRevs = 10; % number of reversals for the staircases
+nRevs = 10; %10; % number of reversals for the staircases
 gabPhase = 0; % pase of underlying sine grating in degrees
 sc = 5; % spatial constant of the exponential "hull"
 radius = 70; % for Gabor arrangement
@@ -108,32 +108,19 @@ numofConds = size(condTable,1)-1; % number of conditions
 [~,~,sdims] = xlsread('screenDims.xlsx');
 
 % Setting up the staircases.
-% alphas = 0:.005:2;
+alphas = -2:.1:4;
 for i=1:(numofConds-1)
-%     staircs(i) = PAL_AMUD_setupUD('up',1,'down',1,...
-%         'stepsizeup',c2n(condTable,'vcUp',i),...
-%         'stepsizedown',c2n(condTable,'vcDn',i),...
-%         'startvalue',c2n(condTable,'vcSt',i),...
-%         'xMin',0,'xMax',2,...
-%         'stopcriterion','reversals','stoprule',nRevs); %#ok<*AGROW>
-%    priorMean = c2n(condTable,'vcSt',i);
-%    prior = PAL_pdfNormal(alphas, priorMean, .5);
-    staircs(i) = PAL_AMRF_setupRF('xMin',0,'xMax',2,...
-        'stopCriterion','reversals','stopRule',nRevs); %#ok<*AGROW>
-%         'priorAlphaRange', alphas, 'prior', prior,...
-%         'startValue',c2n(condTable,'vcSt',i),...
+   priorMean = .5; %c2n(condTable,'vcSt',i);
+   priorSD = 1;
+   prior = PAL_pdfNormal(alphas, priorMean, priorSD);
+   staircs(i) = PAL_AMRF_setupRF('xMin',0,'xMax',2,...
+       'priorAlphaRange', alphas, 'prior', prior,...
+       'stopCriterion','reversals','stopRule',nRevs); %#ok<*AGROW>
 end
 % Setting up an additional staircase with blank trials
-% staircs(numofConds) = PAL_AMUD_setupUD('up',1,'down',1,...
-%     'stepsizeup',c2n(condTable,'vcUp',numofConds),...
-%     'stepsizedown',c2n(condTable,'vcDn',numofConds),...
-%     'startvalue',c2n(condTable,'vcSt',numofConds),...
-%     'xMin',0,'xMax',c2n(condTable,'vcSt',numofConds),...
-%     'stopcriterion','reversals','stoprule',nRevs);
 staircs(numofConds) = PAL_AMRF_setupRF('xMin',0,'xMax',0.001,...
     'priorAlphaRange', [0 0.001],...
     'stopCriterion','reversals','stopRule',nRevs);
-%     'startValue',c2n(condTable,'vcSt',i),...
 
 %% Presenting the instructins window.
 Screen('TextFont', wPtr, 'Cambria');
@@ -376,41 +363,6 @@ for blockTrial=1:numofStaircs
         end
     end
     
-    %% Inner(&outer) Gabors to (hopefully) enhance singleton pop-out.
-    % Inner Gabors:
-    innGabRects = zeros(d.gabNum(c),4);
-    innGabCol = zeros(d.gabNum(c),3);
-    innGabNum = 4; % predetermined number of Gabors
-    innGabStep = 360/innGabNum;
-    innGabMulti = .45;
-    for curGabI = 1:innGabNum % predetermined number of Gabors
-        % The location for each Gabor (to the non-domEye):
-        innGabRects(curGabI,:) = CenterRectOnPoint(texrect, ...
-            disp.centX(1+domEye) + (radius*innGabMulti)*...
-            cosd(innGabStep/2+curGabI*innGabStep), ...
-            disp.centY + (radius*innGabMulti)*sind(innGabStep/2+curGabI*innGabStep));
-        % Always non-singleton colours:
-        innGabCol(curGabI,1:3) = 0;
-        innGabCol(curGabI,d.primCol(c)) = primRgb;
-    end
-    
-%     % Outer Gabors:
-%     outGabRects = zeros(d.gabNum(c),4);
-%     outGabCol = zeros(d.gabNum(c),3);
-%     outGabNum = 4; % predetermined number of Gabors
-%     outGabStep = 360/outGabNum;
-%     outGabMulti = 1.2;
-%     for curGabI = 1:outGabNum 
-%         % The location for each Gabor (to the non-domEye):
-%         outGabRects(curGabI,:) = CenterRectOnPoint(texrect, ...
-%             disp.centX(1+domEye) + (radius*outGabMulti)*...
-%             cosd(outGabStep/2+curGabI*outGabStep), ...
-%             disp.centY + (radius*outGabMulti)*sind(outGabStep/2+curGabI*outGabStep));
-%         % Always non-singleton colours:
-%         outGabCol(curGabI,1:2) = 255;
-%         outGabCol(curGabI,d.primCol(c)) = 0;
-%     end
-    
     curFrame = 0; % (re)setting the current frame count
     mondIndx = 1; % (re)assigning the mondrean index
     while ~respMadeCont
@@ -426,17 +378,6 @@ for blockTrial=1:numofStaircs
                     d.gabOri(c),[], [], gabCol(curGabI,:), [], ...
                     kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, curContr, 1, 0, 0, 0]);
             end
-            % Inner and outer Gabors:
-            for curGabI = 1:innGabNum
-                Screen('DrawTexture', wPtr, gab, [], innGabRects(curGabI,:), ...
-                    d.gabOri(c),[], [], innGabCol(curGabI,:), [], ...
-                    kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, curContr, 1, 0, 0, 0]);
-            end
-%             for curGabI = 1:outGabNum
-%                 Screen('DrawTexture', wPtr, gab, [], outGabRects(curGabI,:), ...
-%                     d.gabOri(c),[], [], outGabCol(curGabI,:), [], ...
-%                     kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, curContr, 1, 0, 0, 0]);
-%             end
         end
         % 2. Post-stimulus blank.
         % Do nothing. The mask is still shown.
@@ -448,8 +389,6 @@ for blockTrial=1:numofStaircs
                 dstRects(d.odtID(c),:),...
                 d.odtTiltOffset(c) ,[], [], [], [], ...
                 kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, 100, 1, 0, 0, 0]);
-%                dstRects(d.singlLoc(c)+d.odtLoc(c)-d.gabNum(c)*...
-%                floor((d.singlLoc(c)+d.odtLoc(c))/(d.gabNum(c)+1)),:), ...
         end
         %% Participant's responses.
         % 4a. Response: ODT tilt.
@@ -586,7 +525,7 @@ for blockTrial=1:numofStaircs
                 if respMadeSubjVis && d.curStairc(c)==numofConds
                     display('Blank trial: Overwriting the response.');
                     % If no response has been made yet, or previous response was zero...
-                    allresps = staircs(d.curStairc(c)).response
+                    allresps = staircs(d.curStairc(c)).response;
                     if isempty(staircs(d.curStairc(c)).response) %|| ...
                         %staircs(d.curStairc(c)).response(end) == 0
                     % ...artificially "reverse" the staircase:

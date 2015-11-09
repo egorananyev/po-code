@@ -1,0 +1,16 @@
+{
+    "contents" : "---\ntitle: \"PO Indiv\"\nauthor: \"Egor Ananyev\"\ndate: \"16 October 2015\"\noutput: html_document\n---\n\n# Loading the data\n```{r}\nlibrary(plyr)\nlibrary(ggplot2)\n#library('R.matlab')\ndataDir = '~/Dropbox/Projects/po/po-data/'\ninFileName = 'po-cond01-test_s1001_d0_2015-11-02_161901'\nws = read.csv(paste(dataDir,inFileName,'.csv',sep=''))\ninColNames = read.csv(paste(dataDir,inFileName,'_colNames.csv',sep=''),\n                      header=F)\ncolnames(ws) <- t(inColNames)\nws$contr <- round(ws$maxContr,3)\nunique(ws$contr)\n# display the number of unique instances of contrast:\ntable(ws$contr)\n# count the number of hits and misses\nws$unSeen[ws$respSubjVis==1] <- 'unseen'\nws$unSeen[ws$respSubjVis>=2] <- 'seen'\nsumss = ddply(ws, .(unSeen,contr), summarise, unSeenCount=length(curStairc))\n( sumss )\n# number of trials in each staircase:\ntable(ws$curStairc)\n# 'false' trials (obj=0/subj=4 {case1} and obj=1/subj=1{case2}):\nws$falseTrials <- 0\nws$falseTrials[ws$respObjVis==0 & ws$respSubjVis==4] <- 1\nws$falseTrials[ws$respObjVis==1 & ws$respSubjVis==1] <- 2\ntable(ws$falseTrials)\n# converting to factor:\nws$curStairc <- as.factor(ws$curStairc)\n```\n\n# Visualizing the staircases\n```{r}\nggplot(data=ws[ws$stairStart!=0,], aes(x=block, y=contr, color=curStairc)) + \n  geom_line() + theme_bw()\nggplot(data=ws[ws$stairStart==.8,], aes(x=block, y=contr, color=curStairc)) +\n  geom_line() + theme_bw()\nggplot(data=ws[ws$stairStart==.01,], aes(x=block, y=contr, color=curStairc)) +\n  geom_line() + theme_bw()\n```\n\n# Visualizing the visibility scores\n```{r, fig.width=10}\nws$xpos <- 5*(ws$block-1)+as.numeric(ws$curStairc)\nggplot(data=ws, aes(x=xpos, y=contr, color=curStairc)) + geom_line() +\n  geom_point(colour='black', size=4) + geom_point(aes(colour=factor(respSubjVis))) +\n  theme_bw()\n```\n\n",
+    "created" : 1446535563819.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2868155458",
+    "id" : "9A8CF39F",
+    "lastKnownWriteTime" : 1446535738,
+    "path" : "~/Dropbox/Projects/po/po-stats/po-indiv.Rmd",
+    "project_path" : "po-indiv.Rmd",
+    "properties" : {
+    },
+    "source_on_save" : false,
+    "type" : "r_markdown"
+}

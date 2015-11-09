@@ -1,0 +1,126 @@
+---
+title: "PO Indiv"
+author: "Egor Ananyev"
+date: "16 October 2015"
+output: html_document
+---
+
+# Loading the data
+```{r}
+library(plyr)
+library(ggplot2)
+#library('R.matlab')
+dataDir = '~/Dropbox/Projects/po/po-data/'
+inFileName = 'po-cond01_s1001_d0_2015-11-09_184336'
+ws = read.csv(paste(dataDir,inFileName,'.csv',sep=''))
+inColNames = read.csv(paste(dataDir,inFileName,'_colNames.csv',sep=''),
+                      header=F)
+colnames(ws) <- t(inColNames)
+ws$contr <- round(ws$maxContr,3)
+ws$contr2 <- round(ws$maxContr,2)
+unique(ws$contr)
+# display the number of unique instances of contrast:
+table(ws$contr)
+# count the number of hits and misses
+ws$unSeen[ws$respSubjVis==1] <- 'unseen'
+ws$unSeen[ws$respSubjVis>=2] <- 'seen'
+# converting to factor:
+ws$curStairc <- as.factor(ws$curStairc)
+```
+
+# Quality control
+```{r}
+###############################################################################
+## Number of seen/unseen trials for dif contrasts:
+sumUnSeen <- ddply(ws, .(unSeen,contr), summarise, unSeenCount=length(curStairc))
+## Negatives:
+# false positivies (reported seen with zero contrast) and true negatives (unseen):
+sumUnSeen[sumUnSeen$contr==0,]
+## Positives
+# unseen positives:
+sumUnSeen[sumUnSeen$contr>0 & sumUnSeen$unSeen=='unseen',]
+# seen positives (with 2 decimals):
+sumUnSeen2 <- ddply(ws, .(unSeen,contr2), summarise, unSeenCount=length(curStairc))
+sumUnSeen2[sumUnSeen2$contr>0 & sumUnSeen2$unSeen=='seen',]
+
+###############################################################################
+## Number of trials in each staircase (should be about equivalent across conds):
+table(ws$curStairc)
+# The number of trials should be balanced across primed vs. unprimed locations
+# for the different levels of singleton contrast (pop-out salience):
+ddply(ws, .(singlCont, odtLoc), summarise, numTrials=length(curStairc))
+
+###############################################################################
+
+
+```
+
+# Visibility scores
+```{r, fig.width=10}
+ws$xpos <- 5*(ws$block-1)+as.numeric(ws$curStairc)
+ggplot(data=ws, aes(x=xpos, y=contr, color=curStairc)) + geom_line() +
+  geom_point(colour='black', size=3) + geom_point(aes(colour=factor(respSubjVis))) +
+  theme_bw() + theme(legend.position='none')
+```
+
+# Accuracy on ODT
+```{r, fig.width=10}
+ws$correct <- 0
+ws$correct[ws$respOdt==1 & ws$odtTiltOffset==1.5] <- 1
+ws$correct[ws$respOdt==2 & ws$odtTiltOffset==-1.5] <- 1
+# Showing the accuracy for each level of subjective visibility (no contrast matching)
+# The difference between 6 (opposite ODT location) and 0 (same location) is the
+# pop-out benefit:
+sumAcc0 <- ddply(ws[ws$odtLoc==0 & ws$contr2>0,], .(respSubjVis,singlCont),
+                summarise , acc0=mean(correct), numTrials0=length(correct))
+sumAcc6 <- ddply(ws[ws$odtLoc==6 & ws$contr2>0,], .(respSubjVis,singlCont),
+                summarise , acc6=mean(correct), numTrials6=length(correct))
+sumAcc <- merge(sumAcc0, sumAcc6, by=c('respSubjVis','singlCont'))
+sumAcc$da <- sumAcc$acc0 - sumAcc$acc6
+( sumAcc )
+sumAcc$singlCont <- as.factor(sumAcc$singlCont)
+sumAcc$respSubjVis <- as.factor(sumAcc$respSubjVis)
+# Plotting the benefit:
+ggplot(data=sumAcc, aes(x=singlCont, y=da, fill=singlCont)) + geom_bar(stat='identity') +
+  facet_grid(.~respSubjVis) + scale_fill_brewer()
+# A long table:
+sumAccAll <- ddply(ws[ws$contr2>0,], .(respSubjVis,singlCont,odtLoc),
+                   summarise, acc=mean(correct), numTrials=length(correct))
+sumAccAll$singlCont <- as.factor(sumAccAll$singlCont)
+sumAccAll$respSubjVis <- as.factor(sumAccAll$respSubjVis)
+# Visualizing the relative frequency of types of trials:
+ggplot(data=sumAccAll, aes(x=singlCont, y=numTrials, fill=singlCont)) + 
+  geom_bar(stat='identity') + facet_grid(.~respSubjVis) + scale_fill_brewer()
+# A more detailed plot
+# Accurate and inaccurate trials
+sumAccTrials <- ddply(ws[ws$contr2>0,], .(respSubjVis,singlCont,odtLoc,correct),
+                   summarise, numTrials=length(correct))
+sumAccTrials$singlCont <- as.factor(sumAccTrials$singlCont)
+sumAccTrials$respSubjVis <- as.factor(sumAccTrials$respSubjVis)
+sumAccTrials$odtLoc <- as.factor(sumAccTrials$odtLoc)
+sumAccTrials$correct <- as.factor(sumAccTrials$correct)
+# Plotting frequencies of correct/incorrect trials for each visibility score:
+ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==1,],
+       aes(x=odtLoc, y=numTrials, fill=correct)) + 
+  geom_bar(stat='identity') + facet_grid(.~singlCont)
+ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==2,],
+       aes(x=odtLoc, y=numTrials, fill=correct)) + 
+  geom_bar(stat='identity') + facet_grid(.~singlCont)
+ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==3,],
+       aes(x=odtLoc, y=numTrials, fill=correct)) + 
+  geom_bar(stat='identity') + facet_grid(.~singlCont)
+ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==4,],
+       aes(x=odtLoc, y=numTrials, fill=correct)) + 
+  geom_bar(stat='identity') + facet_grid(.~singlCont)
+```
+
+# Matching contrast
+```{r}
+# Finding *precise* matches across contrasts:
+unseenContr <- sumUnSeen$contr[sumUnSeen$unSeen=='unseen' & sumUnSeen$contr>0]
+( unseenContr ) # these are the contrasts of unseen, non-zero contrast trials
+# Displaying the number of matches found for the seen and unseen trials:
+contrMatches <- sumUnSeen$contr[sumUnSeen$unSeen=='seen'] %in% unseenContr
+( sum(contrMatches) ) # number of contrast matches
+( sumUnSeen$unSeenCount[contrMatches] ) # number of seen/unseen trials
+```
