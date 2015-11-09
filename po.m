@@ -5,14 +5,16 @@ function po
 % Current test variables:
 subj = 1001;
 domEye = 0; % 0=right, 1=left
-condFileName = 'po-cond01-test';
+condFileName = 'po-cond01';
 
 % Some default variables:
-nRevs = 1; % number of reversals for the staircases
+nRevs = 10; % number of reversals for the staircases
 gabPhase = 0; % pase of underlying sine grating in degrees
 sc = 5; % spatial constant of the exponential "hull"
 radius = 70; % for Gabor arrangement
 feedbackFC = 7; % the number of frames for feedback
+greenRgb = 165; % find this value through equiluminance testing
+redRgb = 255;
 
 % Keyboard:
 KbName('UnifyKeyNames');
@@ -248,8 +250,8 @@ for blockTrial=1:numofStaircs
     d.blockTrial(c) = blockTrial;
     display(sprintf('current block trial: %i', blockTrial));
     display(sprintf('current staircase: %i', d.curStairc(c)));
-    d.stairStart(c) = c2n(condTable,'vcSt',d.curStairc(c));
-    display(sprintf('staircase start value: %.2f', d.stairStart(c)));
+%     d.stairStart(c) = c2n(condTable,'vcSt',d.curStairc(c));
+%     display(sprintf('staircase start value: %.2f', d.stairStart(c)));
     
     % Singleton config:
 %     d.singlType{c} = c2n(condTable,'singlType',d.curStairc(c));
@@ -280,8 +282,11 @@ for blockTrial=1:numofStaircs
     d.singlLoc(c) = randi(d.gabNum(c));
     display(sprintf('singleton ID: %i', d.singlLoc(c)));
     d.primCol(c) = randi(2); % 1=red, 2=green
-    odtAllLocs = [0 d.gabNum(c)/2]; % a bit inelegant - this variable is useless afterwards
-    d.odtLoc(c) = odtAllLocs(randi(numel(odtAllLocs))); % same loc as prime, or opposite
+    if d.primCol(c)==1, display('primary colour: red');
+    else (display('primary colour: green')); end
+    d.odtLoc(c) = c2n(condTable,'odtLoc',d.curStairc(c));
+%     odtAllLocs = [0 d.gabNum(c)/2]; % a bit inelegant - this variable is useless afterwards
+%     d.odtLoc(c) = odtAllLocs(randi(numel(odtAllLocs))); % same loc as prime, or opposite
     if d.odtLoc(c), display('ODT location: opposite'); else display('ODT location: same'); end
     d.odtID(c) = d.singlLoc(c)+d.odtLoc(c)-d.gabNum(c)*...
         floor((d.singlLoc(c)+d.odtLoc(c))/(d.gabNum(c)+1));
@@ -289,7 +294,7 @@ for blockTrial=1:numofStaircs
     d.odtOri(c) = randi([0 1]); % left and right, respectively
     if d.odtOri(c), display('ODT tilt: right'); else display('ODT tilt: left'); end
     d.odtTiltOffset(c) = d.odtTilt(c)-2*d.odtOri(c)*d.odtTilt(c);
-%     display(sprintf('ODT tilt offset: %.2f', d.odtTiltOffset(c)));
+    display(sprintf('ODT tilt offset: %.2f', d.odtTiltOffset(c)));
     
     % Timing vars:
     d.jitFC(c) = randi(round(d.jitTmax(c)*frameRate/1000)); % random jitter
@@ -354,18 +359,20 @@ for blockTrial=1:numofStaircs
     % Cycling through Gabors to adjust the settings:
     dstRects = zeros(d.gabNum(c),4);
     gabCol = zeros(d.gabNum(c),3);
+    % RGB value for primary and pop-out colours:
+    if d.primCol(c)==1, primRgb=redRgb; singlRgb=greenRgb; singlCol=2;
+    else primRgb=greenRgb; singlRgb=redRgb; singlCol=1; end
     for curGabI = 1:d.gabNum(c)
         % The location for each Gabor (to the non-domEye):
         dstRects(curGabI,:) = CenterRectOnPoint(texrect, ...
             disp.centX(1+domEye) + radius*cosd(d.fiStep(c)/2+curGabI*d.fiStep(c)), ...
             disp.centY + radius*sind(d.fiStep(c)/2+curGabI*d.fiStep(c)));
         % Colours:
-        if d.singlLoc(c)==curGabI % for the outlier
-            gabCol(curGabI,1:2) = 255*(1-d.singlCont(c));
-            gabCol(curGabI,d.primCol(c)) = 255*d.singlCont(c);
+        if d.singlLoc(c)==curGabI % for the singleton/pop-out
+            gabCol(curGabI,singlCol) = singlRgb*d.singlCont(c);
+            gabCol(curGabI,d.primCol(c)) = primRgb*(1-d.singlCont(c));
         else % for Gabors other than the outlier
-            gabCol(curGabI,1:2) = 255;
-            gabCol(curGabI,d.primCol(c)) = 0;
+            gabCol(curGabI,d.primCol(c)) = primRgb;
         end
     end
     
@@ -383,8 +390,8 @@ for blockTrial=1:numofStaircs
             cosd(innGabStep/2+curGabI*innGabStep), ...
             disp.centY + (radius*innGabMulti)*sind(innGabStep/2+curGabI*innGabStep));
         % Always non-singleton colours:
-        innGabCol(curGabI,1:2) = 255;
-        innGabCol(curGabI,d.primCol(c)) = 0;
+        innGabCol(curGabI,1:3) = 0;
+        innGabCol(curGabI,d.primCol(c)) = primRgb;
     end
     
 %     % Outer Gabors:
@@ -688,6 +695,7 @@ for blockTrial=1:numofStaircs
         [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
         if keyIsDown,
             if keyCode(KbName(quitkey)),
+                display('Quit key pressed');
                 Screen('CloseAll');
                 ShowCursor;
                 return;
