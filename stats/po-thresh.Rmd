@@ -1,0 +1,57 @@
+---
+title: "PO Threshold Visualization"
+author: "Egor Ananyev"
+date: "16 October 2015"
+output: html_document
+---
+
+# Loading the data
+```{r}
+library(plyr)
+library(ggplot2)
+#library('R.matlab')
+dataDir = '~/Dropbox/Projects/po/po-thresh/'
+inFileName = 'po-prelimThresh_s1002_d0_2015-11-17_150923'
+ws = read.csv(paste(dataDir,inFileName,'.csv',sep=''))
+inColNames = read.csv(paste(dataDir,inFileName,'_colNames.csv',sep=''),
+                      header=F)
+colnames(ws) <- t(inColNames)
+ws$contr <- round(ws$maxContr,3)
+ws$contr2 <- round(ws$maxContr,2)
+unique(ws$contr)
+# display the number of unique instances of contrast:
+table(ws$contr)
+# count the number of hits and misses
+ws$unSeen[ws$respSubjVis==1] <- 'unseen'
+ws$unSeen[ws$respSubjVis>=2] <- 'seen'
+# converting to factor:
+ws$curStairc <- as.factor(ws$curStairc)
+```
+
+# Quality control
+```{r}
+###############################################################################
+## Number of seen/unseen trials for dif contrasts:
+sumUnSeen <- ddply(ws, .(unSeen,contr), summarise, unSeenCount=length(curStairc))
+## Negatives:
+# false positivies (reported seen with zero contrast) and true negatives (unseen):
+sumUnSeen[sumUnSeen$contr==0,]
+## Positives
+# unseen positives:
+sumUnSeen[sumUnSeen$contr>0 & sumUnSeen$unSeen=='unseen',]
+# seen positives (with 2 decimals):
+sumUnSeen2 <- ddply(ws, .(unSeen,contr2), summarise, unSeenCount=length(curStairc))
+sumUnSeen2[sumUnSeen2$contr>0 & sumUnSeen2$unSeen=='seen',]
+
+###############################################################################
+## Number of trials in each staircase (should be about equivalent across conds):
+table(ws$curStairc)
+```
+
+# Visibility scores
+```{r, fig.width=12, fig.height=6}
+ws$xpos <- 5*(ws$block-1)+as.numeric(ws$curStairc)
+ggplot(data=ws, aes(x=xpos, y=contr)) + geom_line(aes(color=curStairc)) +
+  geom_point(aes(shape=factor(respSubjVis))) + 
+  scale_shape_manual(values=c(1,20,16,19)) + theme_bw()
+```
