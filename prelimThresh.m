@@ -10,9 +10,10 @@ condFileName = 'po-prelimThresh';
 gabPhase = 0; % pase of underlying sine grating in degrees
 sc = 5; % spatial constant of the exponential "hull"
 radius = 70; % for Gabor arrangement
-feedbackFC = 0; % the number of frames for feedback
 greenRgb = 165; % find this value through equiluminance testing
 redRgb = 255;
+rfcMax = 2;
+rfcSvs = 0; % response frame counter to register only one key press in so many frames
 
 % Keyboard:
 KbName('UnifyKeyNames');
@@ -38,16 +39,7 @@ outFileName = strcat('../po-thresh/', sessionName);
 % textTiltFdbLeft = ' \n \n \n<- (left)\n ';
 % textTiltFdbRight = ' \n \n \n \n-> (right)';
 textTilt = ' ';
-textTiltFdbLeft = ' ';
-textTiltFdbRight = ' ';
-textObjVis = 'The "circles"\nwere:\npresent (up)\nabsent (down)';
-textObjVisFdbPres = ' \n \npresent (up)\n ';
-textObjVisFdbAbs = ' \n \n \nabsent (down)';
 textSubjVis = '1. no experience\n2. brief glimpse\n3. almost clear\n4. clear experience';
-textSubjVisFdb1 = '1. no experience\n \n \n ';
-textSubjVisFdb2 = ' \n2. brief glimpse\n \n ';
-textSubjVisFdb3 = ' \n \n3. almost clear\n ';
-textSubjVisFdb4 = ' \n \n \n4. clear experience';
 textInstr = 'Press\nany button\nto start';
 textNextTrial = 'Press spacebar\nto continue';
 
@@ -270,8 +262,6 @@ for blockTrial=1:numofStaircs
     respMadeObjVis = false;
     respMadeSubjVis = false;
     respMadeCont = false;
-    respFeedbackObjVis = false;
-    respFeedbackSubjVis = false;
     
     %% Rendering the gratings:
 
@@ -356,86 +346,39 @@ for blockTrial=1:numofStaircs
                 [255 255 50], [], [], [], [], [], boxL);
             DrawFormattedText(wPtr, textSubjVis, 'center', 'center', ...
                 [255 255 50], [], [], [], [], [], boxR);
+        end
+        if curFrame>d.trialFC(c)
             % Monitoring for up/down objective visibility responses.
             [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
             if keyIsDown,
-                if keyCode(KbName('1!'))
-                    d.respSubjVis(c) = 1;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 1');
-                    % Only update the response here if this is a non-blank staircase:
-                    display('Non-blank trial: Recording "unseen" response');
-                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
-                        d.staircVal(c), 0);
-                elseif keyCode(KbName('2@'))
-                    d.respSubjVis(c) = 2;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 2');
-                    display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
-                        d.staircVal(c), 1);
-                elseif keyCode(KbName('3#'))
-                    d.respSubjVis(c) = 3;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 3');
-                    display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
-                        d.staircVal(c), 1);
-                elseif keyCode(KbName('4$'))
-                    d.respSubjVis(c) = 4;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 4');
-                    display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
-                        d.staircVal(c), 1);
+                if rfcSvs>rfcMax
+                    if keyCode(KbName('1!'))
+                        d.respSubjVis(c) = 1;
+                        respMadeSubjVis = true;
+                        display('Response made: subjective visibility score 1');
+                        rfcSvs = 0; % response frame counter
+                    elseif keyCode(KbName('2@'))
+                        d.respSubjVis(c) = 2;
+                        respMadeSubjVis = true;
+                        display('Response made: subjective visibility score 2');
+                        rfcSvs = 0; % response frame counter
+                    elseif keyCode(KbName('3#'))
+                        d.respSubjVis(c) = 3;
+                        respMadeSubjVis = true;
+                        display('Response made: subjective visibility score 3');
+                        rfcSvs = 0; % response frame counter
+                    elseif keyCode(KbName('4$'))
+                        d.respSubjVis(c) = 4;
+                        respMadeSubjVis = true;
+                        display('Response made: subjective visibility score 4');
+                        rfcSvs = 0; % response frame counter
+                    end
                 end
-            end
-        end
-        % Response feedback.
-        if respMadeSubjVis && ~respFeedbackSubjVis
-            fc = fc + 1;
-            if d.respSubjVis(c) == 1
-                DrawFormattedText(wPtr, textSubjVisFdb1, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb1, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            elseif d.respSubjVis(c) == 2
-                DrawFormattedText(wPtr, textSubjVisFdb2, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb2, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            elseif d.respSubjVis(c) == 3
-                DrawFormattedText(wPtr, textSubjVisFdb3, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb3, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            else
-                DrawFormattedText(wPtr, textSubjVisFdb4, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb4, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            end
-            if fc >= feedbackFC
-                respFeedbackSubjVis = true;
-                fc=0;
-                % Writing into d. the current reversals and mean/sd estimates:
-                curRevs = staircs(d.curStairc(c)).reversal;
-                d.revs(c) = curRevs(end);
-                if ~isempty(staircs(d.curStairc(c)).meanUniformPrior)
-                    d.meanUniformPrior(c) = staircs(d.curStairc(c)).meanUniformPrior;
-                    d.sdUniformPrior(c) = staircs(d.curStairc(c)).sdUniformPrior;
-                    d.mean(c) = staircs(d.curStairc(c)).mean;
-                    d.sd(c) = staircs(d.curStairc(c)).sd;
-                else
-                    d.meanUniformPrior(c) = 0;
-                    d.sdUniformPrior(c) = 0;
-                    d.mean(c) = 0;
-                    d.sd(c) = 0;
-                end
+                rfcSvs = rfcSvs + 1;
             end
         end
         %% 4. Response: continue.
-        if respFeedbackSubjVis && ~respMadeCont
+        if respMadeSubjVis && ~respMadeCont
             % Displaying the "continue" text:
             Screen('TextSize', wPtr, 32);
             DrawFormattedText(wPtr, textNextTrial, 'center', 'center', ...
@@ -449,7 +392,17 @@ for blockTrial=1:numofStaircs
                     Screen('Close'); % for optimization
                     respMadeCont = true;
                     display('Response made: continuing to next trial');
-                    % Data recording.
+                    %% Recording into staircase with the latest response.
+                    if d.respSubjVis(c) == 1
+                        display('Non-blank trial: Recording "unseen" response');
+                        staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
+                            d.staircVal(c), 0);
+                    else
+                        display('Non-blank trial: Recording "seen" response');
+                        staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
+                            d.staircVal(c), 1);
+                    end
+                    %% Data recording.
                     % The data in the .mat format:
                     save([outFileName '.mat'], 'd'); % the data structure
                     save([outFileName '_staircs.mat'], 'staircs'); % the staircases

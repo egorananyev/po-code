@@ -6,13 +6,14 @@ function po(subj, domEye)
 
 % Some default variables:
 condFileName = 'po-cond01';
-nRevs = 15; %10; % number of reversals for the staircases
+%nRevs = 15; %10; % number of reversals for the staircases
 gabPhase = 0; % pase of underlying sine grating in degrees
 sc = 5; % spatial constant of the exponential "hull"
 radius = 70; % for Gabor arrangement
-feedbackFC = 7; % the number of frames for feedback
+%feedbackFC = 0; % the number of frames for feedback
 greenRgb = 165; % find this value through equiluminance testing
 redRgb = 255;
+rfcMax = 2; % wait for this many frames before registering new key presses
 
 % Keyboard:
 KbName('UnifyKeyNames');
@@ -36,11 +37,10 @@ if size(inThreshFile,1)>1
 end
 load(strcat('../po-thresh/', inThreshFile.name));
 % Loading the threshold values:
-revs = zeros(1, size(staircs,2));
-for i = 1:size(staircs,2), threshMean(i) = staircs(i).mean; end
-threshMask = mean(threshMean(1:2)) % the threshold with the mask
-threshNoMask = mean(threshMean(3:4)) % the threshold without the mask
-step = (threshMask-threshNoMask) % the step size is determined by the range
+for i = 1:size(staircs,2), threshMean(i) = staircs(i).mean; end %#ok<*AGROW,NODEF>
+threshMask = mean(threshMean(1:2)) %#ok<NOPRT> % the threshold with the mask
+threshNoMask = mean(threshMean(3:4)) %#ok<NOPRT> % the threshold without the mask
+step = (threshMask-threshNoMask)/2 %#ok<NOPRT> % the step size is determined by the range
 clear('staircs'); % clearing the staircase structure for future use
 
 % Output file name:
@@ -50,20 +50,8 @@ sessionName = strcat(condFileName, '_s', mat2str(subj), ...
 outFileName = strcat('../po-data/', sessionName);
 
 % Instructions text:
-% textTilt = 'Please\nindicate\nthe tilt:\n<- (left)\n-> (right)'; % 4 lines
-% textTiltFdbLeft = ' \n \n \n<- (left)\n ';
-% textTiltFdbRight = ' \n \n \n \n-> (right)';
 textTilt = ' ';
-textTiltFdbLeft = ' ';
-textTiltFdbRight = ' ';
-textObjVis = 'The "circles"\nwere:\npresent (up)\nabsent (down)';
-textObjVisFdbPres = ' \n \npresent (up)\n ';
-textObjVisFdbAbs = ' \n \n \nabsent (down)';
 textSubjVis = '1. no experience\n2. brief glimpse\n3. almost clear\n4. clear experience';
-textSubjVisFdb1 = '1. no experience\n \n \n ';
-textSubjVisFdb2 = ' \n2. brief glimpse\n \n ';
-textSubjVisFdb3 = ' \n \n3. almost clear\n ';
-textSubjVisFdb4 = ' \n \n \n4. clear experience';
 textInstr = 'Press\nany button\nto start';
 textNextTrial = 'Press spacebar\nto continue';
 
@@ -127,7 +115,7 @@ for i=1:(numofConds-1)
         'Down',c2n(condTable,'stairDn',i),...
         'stepSizeUp',step,'stepSizeDown',step/c2n(condTable,'dnDivUp',i),...
         'stopCriterion','reversals','stopRule',c2n(condTable,'nRevs',i),...
-        'startValue',threshMask,'xMin',0,'xMax',2);
+        'startValue',threshMask,'xMin',0,'xMax',2); %#ok<AGROW>
 end
 % Setting up an additional staircase with blank trials
 staircs(numofConds) = PAL_AMUD_setupUD('Up',1,'Down',2,...
@@ -216,9 +204,7 @@ end
 
 % Making sure there are still staircases to complete:
 numofStaircs = numofConds;
-numofStops = 0; % the starting number of staircase stop = 0
 c = 0; % initiating trial counter:
-fc = 0; % frame counter for feedback
 bc = 0; % block counter
 %while numofStops<numofConds % while there are still staircs to complete
 while numofStaircs > 0
@@ -297,12 +283,8 @@ for blockTrial=1:numofStaircs
     
     % Resetting the response variables:
     respMadeOdt = false;
-    respMadeObjVis = false;
     respMadeSubjVis = false;
     respMadeCont = false;
-    respFeedbackOdt = false;
-    respFeedbackObjVis = false;
-    respFeedbackSubjVis = false;
     
     %% Rendering the gratings:
 
@@ -399,172 +381,71 @@ for blockTrial=1:numofStaircs
                 [255 255 50], [], [], [], [], [], boxL);
             DrawFormattedText(wPtr, textTilt, 'center', 'center', ...
                 [255 255 50], [], [], [], [], [], boxR);
-            % Monitoring for left/right ODT tilt responses.
-            [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
-            if keyIsDown,
-                if keyCode(KbName('leftarrow')),
-                    d.respOdt(c) = 1; % left arrow
-                    respMadeOdt = true;
-                    display('Response made: left tilt');
-                elseif keyCode(KbName('rightarrow')),
-                    d.respOdt(c) = 2; % right arrow
-                    respMadeOdt = true;
-                    display('Response made: right tilt');
-                end
-            end
         end
-        % Response feedback.
-        if respMadeOdt && ~respFeedbackOdt
-            fc = fc + 1;
-            if d.respOdt(c) == 1
-                DrawFormattedText(wPtr, textTiltFdbLeft, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textTiltFdbLeft, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxR);
-            else
-                DrawFormattedText(wPtr, textTiltFdbRight, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textTiltFdbRight, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxR);
-            end
-            if fc >= feedbackFC, respFeedbackOdt = true; fc=0; end
-        end
-        %% 4b. Response: objective visibility (stimulus set absent/present).
-        if 1>2 %respFeedbackOdt && ~respMadeObjVis
-            % Displaying the "objective visibility" text:
-            Screen('TextSize', wPtr, 26);
-            DrawFormattedText(wPtr, textObjVis, 'center', 'center', ...
-                [255 255 50], [], [], [], [], [], boxL);
-            DrawFormattedText(wPtr, textObjVis, 'center', 'center', ...
-                [255 255 50], [], [], [], [], [], boxR);
-            % Monitoring for up/down objective visibility responses.
-            [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
-            if keyIsDown,
-                if keyCode(KbName('uparrow'))
-                    d.respObjVis(c) = 1;
-                    display('Response made: stimulus set present');
-                    respMadeObjVis = true;
-                elseif keyCode(KbName('downarrow'))
-                    d.respObjVis(c) = 0;
-                    display('Response made: stimulus set absent');
-                    respMadeObjVis = true;
-                end
-            end
-        end
-        % Response feedback.
-        if 1>2 %respMadeObjVis && ~respFeedbackObjVis
-            fc = fc + 1;
-            if d.respObjVis(c) == 1
-                DrawFormattedText(wPtr, textObjVisFdbPres, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textObjVisFdbPres, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxR);
-            else
-                DrawFormattedText(wPtr, textObjVisFdbAbs, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textObjVisFdbAbs, 'center', 'center', ...
-                    [255 255 50], [], [], [], [], [], boxR);
-            end
-            if fc >= feedbackFC, respFeedbackObjVis = true; fc=0; end
-        end
-        %% 4c. Response: subjective visibility scale.
-        if respFeedbackOdt && ~respMadeSubjVis
+        % 4b. Response: subjective visibility scale.
+        if respMadeOdt && ~respMadeSubjVis
             % Displaying the "subjective visibility" text:
             Screen('TextSize', wPtr, 21);
             DrawFormattedText(wPtr, textSubjVis, 'center', 'center', ...
                 [255 255 50], [], [], [], [], [], boxL);
             DrawFormattedText(wPtr, textSubjVis, 'center', 'center', ...
                 [255 255 50], [], [], [], [], [], boxR);
+        end
+        %% Registering the key presses
+        % For the left/right tilt
+        if curFrame>d.trialFC(c)
+            % Monitoring for left/right ODT tilt responses.
+            [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
+            if keyIsDown,
+                if rfcOdt>rfcMax
+                    if keyCode(KbName('leftarrow')),
+                        d.respOdt(c) = 1; % left arrow
+                        display('Response made: left tilt');
+                        rfcOdt = 0; % response frame counter
+                        respMadeOdt = true;
+                    elseif keyCode(KbName('rightarrow')),
+                        d.respOdt(c) = 2; % right arrow
+                        display('Response made: right tilt');
+                        rfcOdt = 0; % response frame counter
+                        respMadeOdt = true;
+                    end
+                end
+                rfcOdt = rfcOdt + 1;
+            end
+        end
+        % For the subjective visibility scale
+        if curFrame>d.trialFC(c)
             % Monitoring for up/down objective visibility responses.
             [keyIsDown, ~, keyCode] = KbCheck(deviceIndex);
             if keyIsDown,
-                if keyCode(KbName('1!'))
-                    d.respSubjVis(c) = 1;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 1');
-                    % Only update the response here if this is a non-blank staircase:
-                    if d.curStairc(c)<numofConds
-                    display('Non-blank trial: Recording "unseen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
-                    end
-                elseif keyCode(KbName('2@'))
-                    d.respSubjVis(c) = 2;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 2');
-                    if d.curStairc(c)<numofConds
-                    display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
-                    end
-                elseif keyCode(KbName('3#'))
-                    d.respSubjVis(c) = 3;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 3');
-                    if d.curStairc(c)<numofConds
-                    display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
-                    end
-                elseif keyCode(KbName('4$'))
-                    d.respSubjVis(c) = 4;
-                    respMadeSubjVis = true;
-                    display('Response made: subjective visibility score 4');
-                    if d.curStairc(c)<numofConds
-                    display('Non-blank trial: Recording "seen" response');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                if rfcSvs>rfcMax
+                    if keyCode(KbName('1!'))
+                        d.respSubjVis(c) = 1;
+                        display('Response made: subjective visibility score 1');
+                        rfcSvs = 0; % response frame counter
+                        respMadeSubjVis = true;
+                    elseif keyCode(KbName('2@'))
+                        d.respSubjVis(c) = 2;
+                        display('Response made: subjective visibility score 2');
+                        rfcSvs = 0; % response frame counter
+                        respMadeSubjVis = true;
+                    elseif keyCode(KbName('3#'))
+                        d.respSubjVis(c) = 3;
+                        display('Response made: subjective visibility score 3');
+                        rfcSvs = 0; % response frame counter
+                        respMadeSubjVis = true;
+                    elseif keyCode(KbName('4$'))
+                        d.respSubjVis(c) = 4;
+                        display('Response made: subjective visibility score 4');
+                        rfcSvs = 0; % response frame counter
+                        respMadeSubjVis = true;
                     end
                 end
-                % If the staircase is the blank one, overwrite the above response with...
-                if respMadeSubjVis && d.curStairc(c)==numofConds
-                    display('Blank trial: Overwriting the response.');
-                    % If no response has been made yet, or previous response was zero...
-                    allresps = staircs(d.curStairc(c)).response;
-                    if isempty(staircs(d.curStairc(c)).response) %|| ...
-                        %staircs(d.curStairc(c)).response(end) == 0
-                    % ...artificially "reverse" the staircase:
-                    display('Blank trial: "seen" (artificial) iteration');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
-                    elseif allresps(end) == 0
-                    display('Blank trial: "seen" (artificial) iteration');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
-                    elseif allresps(end) == 1
-                    display('Blank trial: "unseen" (artificial) iteration');
-                    staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
-                    end
-                end
+                rfcSvs = rfcSvs + 1;
             end
         end
-        % Response feedback.
-        if respMadeSubjVis && ~respFeedbackSubjVis
-            fc = fc + 1;
-            if d.respSubjVis(c) == 1
-                DrawFormattedText(wPtr, textSubjVisFdb1, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb1, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            elseif d.respSubjVis(c) == 2
-                DrawFormattedText(wPtr, textSubjVisFdb2, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb2, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            elseif d.respSubjVis(c) == 3
-                DrawFormattedText(wPtr, textSubjVisFdb3, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb3, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            else
-                DrawFormattedText(wPtr, textSubjVisFdb4, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxL);
-                DrawFormattedText(wPtr, textSubjVisFdb4, 'center', 'center', ...
-                    [255 255 50], 20, [], [], [], [], boxR);
-            end
-            if fc >= feedbackFC
-                respFeedbackSubjVis = true;
-                fc=0;
-                curRevs = staircs(d.curStairc(c)).reversal;
-                d.revs(c) = curRevs(end);
-            end
-        end
-        %% 4d. Response: continue.
-        if respFeedbackSubjVis && ~respMadeCont
+        %% 4c. Response: continue.
+        if respMadeSubjVis && ~respMadeCont
             % Displaying the "continue" text:
             Screen('TextSize', wPtr, 32);
             DrawFormattedText(wPtr, textNextTrial, 'center', 'center', ...
@@ -578,7 +459,35 @@ for blockTrial=1:numofStaircs
                     Screen('Close'); % for optimization
                     respMadeCont = true;
                     display('Response made: continuing to next trial');
-                    % Data recording.
+                    %% Changing the staircase with the final button press:
+                    % Only update the response here if this is a non-blank staircase:
+                    if d.curStairc(c)<numofConds
+                        if d.respSubjVis(c)==1
+                        display('Non-blank trial: Recording "unseen" response');
+                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+                        else
+                        display('Non-blank trial: Recording "seen" response');
+                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                        end
+                    % If the staircase is the blank one, overwrite the above response with...
+                    else
+                        display('Blank trial: Overwriting the response.');
+                        % If no response has been made yet, or previous response was zero...
+                        allresps = staircs(d.curStairc(c)).response;
+                        if isempty(staircs(d.curStairc(c)).response) %|| ...
+                            %staircs(d.curStairc(c)).response(end) == 0
+                        % ...artificially "reverse" the staircase:
+                        display('Blank trial: "seen" (artificial) iteration');
+                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                        elseif allresps(end) == 0
+                        display('Blank trial: "seen" (artificial) iteration');
+                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+                        elseif allresps(end) == 1
+                        display('Blank trial: "unseen" (artificial) iteration');
+                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+                        end
+                    end
+                    %% Data recording.
                     % The data in the .mat format:
                     save([outFileName '.mat'], 'd'); % the data structure
                     save([outFileName '_staircs.mat'], 'staircs'); % the staircases
@@ -599,7 +508,7 @@ for blockTrial=1:numofStaircs
         end
         %% Tail
         % Mask:
-        if curFrame<=(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)) & d.maskOnOff(c)
+        if curFrame<=(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)) && d.maskOnOff(c)
             % Alternating frequency is set by maskRR (refresh rate):
             if rem(curFrame,d.maskRR(c))==0
                 mondIndx = mondIndx + 1;
