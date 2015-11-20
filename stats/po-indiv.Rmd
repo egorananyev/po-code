@@ -11,7 +11,7 @@ library(plyr)
 library(ggplot2)
 #library('R.matlab')
 dataDir = '~/Dropbox/Projects/po/po-data/'
-inFileName = 'po-cond01_s1002_d0_2015-11-17_155757'
+inFileName = 'po-cond01_s1001_d0_2015-11-19_163939'
 ws = read.csv(paste(dataDir,inFileName,'.csv',sep=''))
 inColNames = read.csv(paste(dataDir,inFileName,'_colNames.csv',sep=''),
                       header=F)
@@ -68,15 +68,22 @@ ggplot(data=ws, aes(x=xpos, y=contr, color=curStairc)) + geom_line() +
 ws$correct <- 0
 ws$correct[ws$respOdt==1 & ws$odtTiltOffset==1.5] <- 1
 ws$correct[ws$respOdt==2 & ws$odtTiltOffset==-1.5] <- 1
+# Accuracy as a fn of ODT location and tilt:
+sumAccLoc <- ddply(ws, .(odtID), summarise, accLoc=mean(correct), 
+                   numTrials=length(correct), numPrim=sum(odtLoc==0)/length(odtLoc))
+(sumAccLoc)
+sumAccTilt <- ddply(ws, .(odtTiltOffset), summarise, accLoc=mean(correct),
+                   numTrials=length(correct), numPrim=sum(odtLoc==0)/length(odtLoc))
+(sumAccTilt)
 # Showing the accuracy for each level of subjective visibility (no contrast matching)
 # The difference between 6 (opposite ODT location) and 0 (same location) is the
 # pop-out benefit:
-sumAcc0 <- ddply(ws[ws$odtLoc==0 & ws$contr2>0,], .(respSubjVis,singlCont),
-                summarise , acc0=mean(correct), numTrials0=length(correct))
-sumAcc6 <- ddply(ws[ws$odtLoc==6 & ws$contr2>0,], .(respSubjVis,singlCont),
-                summarise , acc6=mean(correct), numTrials6=length(correct))
-sumAcc <- merge(sumAcc0, sumAcc6, by=c('respSubjVis','singlCont'))
-sumAcc$da <- sumAcc$acc0 - sumAcc$acc6
+sumAccPrim <- ddply(ws[ws$odtLoc==0 & ws$contr2>0,], .(respSubjVis,singlCont),
+                summarise, accPrim=mean(correct), numTrialsPrim=length(correct))
+sumAccUnpr <- ddply(ws[ws$odtLoc==1 & ws$contr2>0,], .(respSubjVis,singlCont),
+                summarise, accUnpr=mean(correct), numTrialsUnpr=length(correct))
+sumAcc <- merge(sumAccPrim, sumAccUnpr, by=c('respSubjVis','singlCont'))
+sumAcc$da <- sumAcc$accPrim - sumAcc$accUnpr
 ( sumAcc )
 sumAcc$singlCont <- as.factor(sumAcc$singlCont)
 sumAcc$respSubjVis <- as.factor(sumAcc$respSubjVis)

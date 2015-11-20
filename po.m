@@ -34,13 +34,16 @@ inThreshFile = dir(inThreshSearch);
 if size(inThreshFile,1)>1
     display('More than one file matching the criteria!');
     inThreshFile = uigetfile(inThreshSearch);
+    load(strcat('../po-thresh/', inThreshFile));
+else
+    load(strcat('../po-thresh/', inThreshFile.name));
 end
-load(strcat('../po-thresh/', inThreshFile.name));
+
 % Loading the threshold values:
 for i = 1:size(staircs,2), threshMean(i) = staircs(i).mean; end %#ok<*AGROW,NODEF>
 threshMask = mean(threshMean(1:2)) %#ok<NOPRT> % the threshold with the mask
 threshNoMask = mean(threshMean(3:4)) %#ok<NOPRT> % the threshold without the mask
-step = (threshMask-threshNoMask)/2 %#ok<NOPRT> % the step size is determined by the range
+step = (threshMask-.01)/3 %#ok<NOPRT> % the step size is determined by the range
 clear('staircs'); % clearing the staircase structure for future use
 
 % Output file name:
@@ -54,6 +57,11 @@ textTilt = ' ';
 textSubjVis = '1. no experience\n2. brief glimpse\n3. almost clear\n4. clear experience';
 textInstr = 'Press\nany button\nto start';
 textNextTrial = 'Press spacebar\nto continue';
+% Feedback params:
+noRespCol = [200 200 200];
+respFdbkLxOffset = 600;
+respFdbkRxOffset = respFdbkLxOffset+70;
+respFdbkYOffset = 345;
 
 %% Preparing PsychToolBox and screen.
 
@@ -113,13 +121,13 @@ numofConds = size(condTable,1)-1; % number of conditions
 for i=1:(numofConds-1)
     staircs(i) = PAL_AMUD_setupUD('Up',c2n(condTable,'stairUp',i),...
         'Down',c2n(condTable,'stairDn',i),...
-        'stepSizeUp',step,'stepSizeDown',step/c2n(condTable,'dnDivUp',i),...
+        'stepSizeUp',step*c2n(condTable,'stepUpMulti',i),'stepSizeDown',step,...
         'stopCriterion','reversals','stopRule',c2n(condTable,'nRevs',i),...
-        'startValue',threshMask,'xMin',0,'xMax',2); %#ok<AGROW>
+        'startValue',threshMask+step,'xMin',0,'xMax',2); %#ok<AGROW>
 end
 % Setting up an additional staircase with blank trials
 staircs(numofConds) = PAL_AMUD_setupUD('Up',1,'Down',2,...
-    'stepSizeUp',0.001,'stepSizeDown',step/c2n(condTable,'dnDivUp',numofConds),...
+    'stepSizeUp',0.001,'stepSizeDown',0.001,...
     'stopCriterion','reversals','stopRule',c2n(condTable,'nRevs',numofConds),...
     'startValue',0,'xMin',0,'xMax',0.001);
 
@@ -225,6 +233,7 @@ display(sprintf('number of remaining staircases: %i', numofStaircs));
 for blockTrial=1:numofStaircs
     %% Drawing the gratings for this trial.
     c = c + 1; % trial counter
+    rfcSvs = 3; rfcOdt = 3; % presetting rfc variables
     
     % All of the trial-specific data are recorded in structure d.
     display('=====');
@@ -266,9 +275,12 @@ for blockTrial=1:numofStaircs
     if d.primCol(c)==1, display('primary colour: red');
     else (display('primary colour: green')); end
     d.odtLoc(c) = c2n(condTable,'odtLoc',d.curStairc(c));
-    if d.odtLoc(c), display('ODT location: opposite'); else display('ODT location: same'); end
-    d.odtID(c) = d.singlLoc(c)+d.odtLoc(c)-d.gabNum(c)*...
-        floor((d.singlLoc(c)+d.odtLoc(c))/(d.gabNum(c)+1));
+    if d.odtLoc(c), display('ODT location: different'); else display('ODT location: same'); end
+    d.odtOffset(c) = 4*randi(2); % either +4 or +8 positions
+    display(sprintf('ODT offset: %i', d.odtOffset(c)));
+    d.odtID(c) = d.singlLoc(c)+d.odtLoc(c)*d.odtOffset(c)-d.gabNum(c)*...
+        floor((d.singlLoc(c)+d.odtLoc(c)*d.odtOffset(c))/(d.gabNum(c)+1));
+    display(sprintf('ODT ID: %i', d.odtID(c)));
     d.odtOri(c) = randi([0 1]); % left and right, respectively
     if d.odtOri(c), display('ODT tilt: right'); else display('ODT tilt: left'); end
     d.odtTiltOffset(c) = d.odtTilt(c)-2*d.odtOri(c)*d.odtTilt(c);
@@ -280,6 +292,8 @@ for blockTrial=1:numofStaircs
     d.postStimBlankFC(c) = round(d.postStimBlankT(c)*frameRate/1000);
     d.odtFC(c) = round(d.odtT(c)*frameRate/1000);
     d.trialFC(c) = d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)+d.odtFC(c);
+    d.stimRamp(c) = c2n(condTable,'stimRamp',d.curStairc(c));
+    d.rampLin(c) = c2n(condTable,'rampLin',d.curStairc(c));
     
     % Resetting the response variables:
     respMadeOdt = false;
@@ -352,7 +366,15 @@ for blockTrial=1:numofStaircs
         % 1. The priming stage.
         if curFrame>d.jitFC(c) && curFrame<=d.stimFC(c)+d.jitFC(c)
             % The contrast varies through the frames:
-            curContr = ( exp(-(-1+(2*curFrame/d.stimFC(c)))^2*4) )*d.maxContr(c)*100;
+            if d.stimRamp(c)
+                if d.rampLin(c)
+                    curContr = (curFrame/d.stimFC(c))*d.maxContr(c)*100;
+                else
+                    curContr = ( exp(-(-1+(2*curFrame/d.stimFC(c)))^2*4) )*d.maxContr(c)*100;
+                end
+            else % or not:
+                curContr = d.maxContr(c)*100;
+            end
             % Cycling through the Gabors:
             for curGabI = 1:d.gabNum(c)
                 Screen('DrawTexture', wPtr, gab, [], dstRects(curGabI,:), ...
@@ -366,8 +388,7 @@ for blockTrial=1:numofStaircs
         if curFrame>(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)) && curFrame<=d.trialFC(c)
             % the below gabID computation is necessary for the index not to
             % exceed the number of Gabors:
-            Screen('DrawTexture', wPtr, gab, [], ...
-                dstRects(d.odtID(c),:),...
+            Screen('DrawTexture', wPtr, gab, [], dstRects(d.odtID(c),:),...
                 d.odtTiltOffset(c) ,[], [], [], [], ...
                 kPsychDontDoRotation, [gabPhase, d.gabSf(c), sc, 100, 1, 0, 0, 0]);
         end
@@ -444,8 +465,44 @@ for blockTrial=1:numofStaircs
                 rfcSvs = rfcSvs + 1;
             end
         end
+        %% Displaying response summary on top of the window
+        if curFrame>(d.trialFC(c)+30)
+            Screen('TextSize', wPtr, 18);
+            % ODT feedback
+            if respMadeOdt
+                if d.respOdt(c)==1, textRespOdt='left'; else, textRespOdt='right'; end
+                textRespOdtCol = [200 150 100*d.respOdt(c)];
+                DrawFormattedText(wPtr, strcat('tilt:', textRespOdt), ...
+                    respFdbkLxOffset, respFdbkYOffset, textRespOdtCol, ...
+                    14, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, strcat('tilt:', textRespOdt), ...
+                    disp.distX*2+respFdbkLxOffset, respFdbkYOffset, textRespOdtCol, ...
+                    14, [], [], [], [], boxR);
+            else
+                DrawFormattedText(wPtr, 'tilt:?', respFdbkLxOffset, respFdbkYOffset, ...
+                    noRespCol, 14, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, 'tilt:?', disp.distX*2+respFdbkLxOffset, ...
+                respFdbkYOffset, noRespCol, 14, [], [], [], [], boxR);
+            end
+            % Visibility feedback
+            if respMadeSubjVis
+                respSubjVisString = mat2str(d.respSubjVis(c));
+                textRespSubjVisCol = [150 50*d.respSubjVis(c) 200];
+                DrawFormattedText(wPtr, strcat('visibility:', respSubjVisString),...
+                    respFdbkRxOffset, respFdbkYOffset, textRespSubjVisCol, 14, ...
+                    [], [], [], [], boxL);
+                DrawFormattedText(wPtr, strcat('visibility:', respSubjVisString),...
+                    disp.distX*2+respFdbkRxOffset, respFdbkYOffset, textRespSubjVisCol, 14, ...
+                    [], [], [], [], boxR);
+            else
+                DrawFormattedText(wPtr, 'visibility:?', respFdbkRxOffset, respFdbkYOffset, ...
+                    noRespCol, 14, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, 'visibility:?', disp.distX*2+respFdbkRxOffset, ...
+                respFdbkYOffset, noRespCol, 14, [], [], [], [], boxR);
+            end
+        end
         %% 4c. Response: continue.
-        if respMadeSubjVis && ~respMadeCont
+        if respMadeOdt && respMadeSubjVis && ~respMadeCont
             % Displaying the "continue" text:
             Screen('TextSize', wPtr, 32);
             DrawFormattedText(wPtr, textNextTrial, 'center', 'center', ...
@@ -469,23 +526,23 @@ for blockTrial=1:numofStaircs
                         display('Non-blank trial: Recording "seen" response');
                         staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
                         end
-                    % If the staircase is the blank one, overwrite the above response with...
-                    else
-                        display('Blank trial: Overwriting the response.');
-                        % If no response has been made yet, or previous response was zero...
-                        allresps = staircs(d.curStairc(c)).response;
-                        if isempty(staircs(d.curStairc(c)).response) %|| ...
-                            %staircs(d.curStairc(c)).response(end) == 0
-                        % ...artificially "reverse" the staircase:
-                        display('Blank trial: "seen" (artificial) iteration');
-                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
-                        elseif allresps(end) == 0
-                        display('Blank trial: "seen" (artificial) iteration');
-                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
-                        elseif allresps(end) == 1
-                        display('Blank trial: "unseen" (artificial) iteration');
-                        staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
-                        end
+%                     % If the staircase is the blank one, overwrite the above response with...
+%                     else
+%                         display('Blank trial: Overwriting the response.');
+%                         % If no response has been made yet, or previous response was zero...
+%                         allresps = staircs(d.curStairc(c)).response
+%                         if isempty(staircs(d.curStairc(c)).response) %|| ...
+%                             %staircs(d.curStairc(c)).response(end) == 0
+%                         % ...artificially "reverse" the staircase:
+%                         display('Blank trial: "seen" (artificial) iteration');
+%                         staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+%                         elseif allresps(end) == 0
+%                         display('Blank trial: "seen" (artificial) iteration');
+%                         staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 1);
+%                         elseif allresps(end) == 1
+%                         display('Blank trial: "unseen" (artificial) iteration');
+%                         staircs(d.curStairc(c)) = PAL_AMUD_updateUD(staircs(d.curStairc(c)), 0);
+%                         end
                     end
                     %% Data recording.
                     % The data in the .mat format:
@@ -549,6 +606,13 @@ for i = 1:size(staircs,2)
     revs(i) = max(staircs(i).reversal);
 end
 display(revs);
+
+% If the rest of the conditions are already finished, finishing the blank stairc:
+if numofStaircs == 1
+    staircs(numofConds).stop = 1;
+    numofStops = numofConds;
+    numofStaircs = 0;
+end
 
 end
 

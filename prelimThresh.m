@@ -13,7 +13,7 @@ radius = 70; % for Gabor arrangement
 greenRgb = 165; % find this value through equiluminance testing
 redRgb = 255;
 rfcMax = 2;
-rfcSvs = 0; % response frame counter to register only one key press in so many frames
+rfcSvs = 5; % response frame counter to register only one key press in so many frames
 
 % Keyboard:
 KbName('UnifyKeyNames');
@@ -82,7 +82,7 @@ disp.resY = rect(4); % 1080
 disp.boxColour = [255 255 255]; % white
 disp.boxSize = 90;
 disp.distX = 170; % 150; % display center distance from the vertical midline (left/right)
-disp.distY = -100; % display center distance from the horizontal midline (up)
+disp.distY = -95; % display center distance from the horizontal midline (up)
 disp.centX(1:2) = [disp.resX/2-disp.distX disp.resX/2+disp.distX]; % 230(L) & 730(R)
 disp.centY = disp.resY/2 + disp.distY; % 540-200=340
 
@@ -253,10 +253,16 @@ for blockTrial=1:numofStaircs
     else (display('primary colour: green')); end
     
     % Timing vars:
-    d.jitFC(c) = randi(round(d.jitTmax(c)*frameRate/1000)); % random jitter
+    if d.jitTmax(c)>0
+        d.jitFC(c) = randi(round(d.jitTmax(c)*frameRate/1000)); % random jitter
+    else
+        d.jitFC(c) = 0;
+    end
     d.stimFC(c) = round(d.stimT(c)*frameRate/1000);
     d.postStimBlankFC(c) = round(d.postStimBlankT(c)*frameRate/1000);
     d.trialFC(c) = d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c);
+    d.stimRamp(c) = c2n(condTable,'stimRamp',d.curStairc(c));
+    d.rampLin(c) = c2n(condTable,'rampLin',d.curStairc(c));
     
     % Resetting the response variables:
     respMadeObjVis = false;
@@ -328,7 +334,15 @@ for blockTrial=1:numofStaircs
         % 1. The priming stage.
         if curFrame>d.jitFC(c) && curFrame<=d.stimFC(c)+d.jitFC(c)
             % The contrast varies through the frames:
-            curContr = ( exp(-(-1+(2*curFrame/d.stimFC(c)))^2*4) )*d.maxContr(c)*100;
+            if d.stimRamp(c)
+                if d.rampLin(c)
+                    curContr = (curFrame/d.stimFC(c))*d.maxContr(c)*100;
+                else
+                    curContr = ( exp(-(-1+(2*curFrame/d.stimFC(c)))^2*4) )*d.maxContr(c)*100;
+                end
+            else
+                curContr = d.maxContr(c)*100;
+            end
             % Cycling through the Gabors:
             for curGabI = 1:d.gabNum(c)
                 Screen('DrawTexture', wPtr, gab, [], dstRects(curGabI,:), ...
@@ -377,6 +391,24 @@ for blockTrial=1:numofStaircs
                 rfcSvs = rfcSvs + 1;
             end
         end
+        %% Displaying response summary on top of the window
+        if curFrame>d.trialFC(c)
+            Screen('TextSize', wPtr, 18);
+            if respMadeSubjVis
+                respSubjVisString = mat2str(d.respSubjVis(c));
+                textRespSubjVisCol = [150 50*d.respSubjVis(c) 200];
+                DrawFormattedText(wPtr, strcat('visibility: "', respSubjVisString, '"'), ...
+                    'center', 355, textRespSubjVisCol, 14, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, strcat('visibility: "', respSubjVisString, '"'), ...
+                    'center', 355, textRespSubjVisCol, 14, [], [], [], [], boxR);
+            else
+                textRespSubjVisCol = [200 200 200];
+                DrawFormattedText(wPtr, 'visibility: "?"', 'center', 355, ...
+                    textRespSubjVisCol, 14, [], [], [], [], boxL);
+                DrawFormattedText(wPtr, 'visibility: "?"', 'center', 355, ...
+                    textRespSubjVisCol, 14, [], [], [], [], boxR);
+            end
+        end
         %% 4. Response: continue.
         if respMadeSubjVis && ~respMadeCont
             % Displaying the "continue" text:
@@ -402,6 +434,20 @@ for blockTrial=1:numofStaircs
                         staircs(d.curStairc(c)) = PAL_AMRF_updateRF(staircs(d.curStairc(c)), ...
                             d.staircVal(c), 1);
                     end
+                    % Writing into d. the current reversals and mean/sd estimates:
+                    curRevs = staircs(d.curStairc(c)).reversal;
+                    d.revs(c) = curRevs(end);
+                    if ~isempty(staircs(d.curStairc(c)).meanUniformPrior)
+                        d.meanUniformPrior(c) = staircs(d.curStairc(c)).meanUniformPrior;
+                        d.sdUniformPrior(c) = staircs(d.curStairc(c)).sdUniformPrior;
+                        d.mean(c) = staircs(d.curStairc(c)).mean;
+                        d.sd(c) = staircs(d.curStairc(c)).sd;
+                    else
+                        d.meanUniformPrior(c) = 0;
+                        d.sdUniformPrior(c) = 0;
+                        d.mean(c) = 0;
+                        d.sd(c) = 0;
+                    end 
                     %% Data recording.
                     % The data in the .mat format:
                     save([outFileName '.mat'], 'd'); % the data structure
@@ -419,7 +465,7 @@ for blockTrial=1:numofStaircs
         end
         %% Tail
         % Mask:
-        if curFrame<=(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)) & d.maskOnOff(c)
+        if curFrame<=(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)) && d.maskOnOff(c)
             % Alternating frequency is set by maskRR (refresh rate):
             if rem(curFrame,d.maskRR(c))==0
                 mondIndx = mondIndx + 1;
