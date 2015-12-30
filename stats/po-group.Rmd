@@ -1,0 +1,192 @@
+---
+title: "PO Group"
+author: "Egor Ananyev"
+date: "25 November 2015"
+output: html_document
+---
+
+# Loading the data
+```{r}
+library(plyr)
+library(ggplot2)
+#library('R.matlab')
+# dataDir <- '~/Dropbox/Projects/po/po-data/'
+dataDir <- 'C:/Users/Egor/Dropbox/Projects/po/po-data/'
+# inFileName <- c('po-cond01_s1004_d0_2015-11-25_173805',
+#               'po-cond01_s1005_d1_2015-11-24_155056',
+#               'po-cond01_s1006_d1_2015-11-24_171945',
+#               'po-cond01_s1007_d0_2015-11-25_162543',
+#               'po-cond01_s1008_d0_2015-11-26_102329',
+#               'po-cond01_s1009_d1_2015-11-26_111619',
+#               'po-cond01_s1001_d1_2015-11-26_120543',
+#               'po-cond01_s1003_d0_2015-11-30_150813',
+inFileName <- c('po-cond01_s1001_d0_2015-12-02_182532',
+                'po-cond01_s1003_d0_2015-11-30_150813',
+                'po-cond01_s1004_d0_2015-12-02_140822',
+                'po-cond01_s1012_d0_2015-11-30_165214',
+                'po-cond01_s1013_d0_2015-12-01_102648',
+                'po-cond01_s1014_d0_2015-12-01_132504',
+                'po-cond01_s1015_d0_2015-12-01_142913',
+                'po-cond01_s1016_d1_2015-12-01_154358',
+                'po-cond01_s1017_d0_2015-12-01_162719',
+                'po-cond01_s1018_d0_2015-12-02_102653',
+                'po-cond01_s1019_d0_2015-12-02_132947_fixed')
+subjIDs <- c('1001','1003','1004','1012','1013','1014','1015','1016','1017','1018','1019')
+# subjIDs <- c('1004','1005','1006','1007','1008','1009','1000','1003','1012','1013','1014','1015','1016','1017','1018')
+ws <- data.frame()
+inColNames <- read.csv(paste(dataDir,inFileName[6],'_colNames.csv',sep=''),
+                      header=F)
+inColNames <- as.character(t(inColNames))
+(inColNames)
+for (i in 1:length(inFileName) ){
+  ss <- read.csv(paste(dataDir,inFileName[i],'.csv',sep=''))
+  print(nrow(ss))
+  colnames(ss) <- inColNames
+  ss$subjID <- subjIDs[i]
+  if (i==1){
+    ws <- ss
+  }else{
+    ws <- merge(ws,ss,by=c(inColNames,'subjID'),all=T)
+  }
+}
+print(nrow(ws))
+  
+ws$contr <- round(ws$maxContr,3)
+ws$contr2 <- round(ws$maxContr,2)
+# count the number of hits and misses
+ws$unSeen[ws$respSubjVis==1] <- 'unseen'
+ws$unSeen[ws$respSubjVis>=2] <- 'seen'
+# converting to factor:
+ws$curStairc <- as.factor(ws$curStairc)
+ws$correct <- 0
+ws$correct[ws$respOdt==1 & ws$odtOri==0] <- 1 #left
+ws$correct[ws$respOdt==2 & ws$odtOri==1] <- 1 #right
+ws$subjID <- as.factor(ws$subjID)
+```
+
+# Subject quality checks
+```{r, fig.width=10}
+( ddply(ws, .(subjID), summarise,
+        subjAccuracy=mean(correct), blocksComplete=max(block)) )
+# Subjects 14, 16, and 19 completed fewer than 34 blocks.
+# Subjects 13, 15, and 16 perform at chance on ODT
+
+# Exclude 16 (<20 blocks) and 13 & 15 (chance ODT):
+ws <- ws[!ws$subjID %in% c('1013','1015','1016'), ]
+# ws <- ws[ws$subjID %in% c('1001','1003','1004'), ]
+wows <- ws[ws$singlCont>0,]
+```
+
+# Visualizing the data
+```{r, fig.width=10}
+# Showing the accuracy for each level of subjective visibility (no contrast matching)
+# The difference between 6 (opposite ODT location) and 0 (same location) is the
+# pop-out benefit:
+sumAccPrim <- ddply(ws[ws$odtLoc==0 & ws$contr2>0.009,], .(respSubjVis,singlCont,subjID),
+            summarise, accPrim=mean(correct), numTrialsPrim=length(correct))
+sumAccUnpr <- ddply(ws[ws$odtLoc!=0 & ws$contr2>0.009,], .(respSubjVis,singlCont,subjID),
+            summarise, accUnpr=mean(correct), numTrialsUnpr=length(correct))
+sumAcc <- merge(sumAccPrim, sumAccUnpr, by=c('respSubjVis','singlCont','subjID'))
+sumAcc$da <- sumAcc$accPrim - sumAcc$accUnpr
+sumAcc$singlCont <- as.factor(sumAcc$singlCont)
+sumAcc$respSubjVis <- as.factor(sumAcc$respSubjVis)
+sumAcc$ave <- mean(c(sumAcc$numTrialsPrim,sumAcc$numTrialsUnpr))
+sumAcc$ave <- (sumAcc$numTrialsPrim+sumAcc$numTrialsUnpr)/2
+# Plotting the benefit:
+ggplot(data=sumAcc, aes(x=singlCont, y=da, color=subjID)) + 
+  geom_point(stat='identity',position='dodge',aes(size=ave),alpha=.7) + 
+  facet_grid(.~respSubjVis) + theme_bw() + #scale_color_brewer() + 
+  labs(x='Pop-out salience', y='Priming accuracy benefit (%)', fill='Pop-out salience',
+    title='Priming benefit on ODT performance') +
+  geom_smooth(aes(group=subjID), method='lm', formula=y~poly(x,2), alpha=.2, se=F)
+ggplot(data=sumAcc, aes(x=singlCont, y=da, color=subjID)) + 
+  geom_point(stat='identity',position='dodge',aes(size=ave),alpha=.7) + 
+  facet_grid(.~respSubjVis) + theme_bw() + #scale_color_brewer() + 
+  labs(x='Pop-out salience', y='Priming accuracy benefit (%)', fill='Pop-out salience',
+    title='Priming benefit on ODT performance') +
+  geom_smooth(aes(group=subjID), method='lm', alpha=.2, se=F)
+
+sumAccPrim <- ddply(ws[ws$odtLoc==0 & ws$contr2>0.009 & ws$primCol==1,], .(respSubjVis,singlCont,subjID),
+            summarise, accPrim=mean(correct), numTrialsPrim=length(correct))
+sumAccUnpr <- ddply(ws[ws$odtLoc!=0 & ws$contr2>0.009 & ws$primCol==1,], .(respSubjVis,singlCont,subjID),
+            summarise, accUnpr=mean(correct), numTrialsUnpr=length(correct))
+sumAcc <- merge(sumAccPrim, sumAccUnpr, by=c('respSubjVis','singlCont','subjID'))
+sumAcc$da <- sumAcc$accPrim - sumAcc$accUnpr
+sumAcc$singlCont <- as.factor(sumAcc$singlCont)
+sumAcc$respSubjVis <- as.factor(sumAcc$respSubjVis)
+sumAcc$ave <- mean(c(sumAcc$numTrialsPrim,sumAcc$numTrialsUnpr))
+sumAcc$ave <- (sumAcc$numTrialsPrim+sumAcc$numTrialsUnpr)/2
+# Plotting the benefit:
+ggplot(data=sumAcc, aes(x=singlCont, y=da, color=subjID)) + 
+  geom_point(stat='identity',position='dodge',aes(size=ave),alpha=.7) + 
+  facet_grid(.~respSubjVis) + theme_bw() +
+  labs(x='Pop-out salience', y='Priming accuracy benefit (%)', fill='Pop-out salience',
+    title='Priming benefit on ODT performance') +
+  geom_smooth(aes(group=subjID), method='lm', alpha=.2, se=F)
+
+sumAccPrim <- ddply(ws[ws$odtLoc==0 & ws$contr2>0.009 & ws$primCol==2,], 
+                    .(respSubjVis,singlCont,subjID),
+            summarise, accPrim=mean(correct), numTrialsPrim=length(correct))
+sumAccUnpr <- ddply(ws[ws$odtLoc!=0 & ws$contr2>0.009 & ws$primCol==2,], 
+                    .(respSubjVis,singlCont,subjID),
+            summarise, accUnpr=mean(correct), numTrialsUnpr=length(correct))
+sumAcc <- merge(sumAccPrim, sumAccUnpr, by=c('respSubjVis','singlCont','subjID'))
+sumAcc$da <- sumAcc$accPrim - sumAcc$accUnpr
+sumAcc$singlCont <- as.factor(sumAcc$singlCont)
+sumAcc$respSubjVis <- as.factor(sumAcc$respSubjVis)
+sumAcc$ave <- mean(c(sumAcc$numTrialsPrim,sumAcc$numTrialsUnpr))
+sumAcc$ave <- (sumAcc$numTrialsPrim+sumAcc$numTrialsUnpr)/2
+# Plotting the benefit:
+ggplot(data=sumAcc, aes(x=singlCont, y=da, color=subjID)) + 
+  geom_point(stat='identity',position='dodge',aes(size=ave),alpha=.7) + 
+  facet_grid(.~respSubjVis) + theme_bw() +
+  labs(x='Pop-out salience', y='Priming accuracy benefit (%)', fill='Pop-out salience',
+    title='Priming benefit on ODT performance') +
+  geom_smooth(aes(group=subjID), method='lm', alpha=.2, se=F)
+```
+
+# Logistic models
+```{r, fig.width=10}
+library('lme4')
+
+# General, unrefined model
+m1 <- glmer(correct~0+respSubjVis*singlCont+(1|subjID),data=wows,family=binomial)
+(summary(m1))
+se <- sqrt(diag(vcov(m1))) # getting the standard errors for CI estimation
+( tab <- cbind(Est=fixef(m1),LL=fixef(m1)-1.96*se,UL=fixef(m1)+1.96*se) )
+
+# Dropping visibility ratings 2 and 3
+m2 <- glmer(correct~0+respSubjVis*singlCont+(1|subjID),
+            data=wows[wows$respSubjVis!=2 & wows$respSubjVis!=3,],family=binomial)
+(summary(m2))
+se <- sqrt(diag(vcov(m2))) # getting the standard errors for CI estimation
+( tab <- cbind(Est=fixef(m2),LL=fixef(m2)-1.96*se,UL=fixef(m2)+1.96*se) )
+
+# Invisible trials
+m3 <- glmer(correct~singlCont+(singlCont|subjID),
+            data=wows[wows$respSubjVis==1,],family=binomial)
+m3 <- glmer(correct~0+singlCont+(singlCont|subjID),
+            data=wows[wows$respSubjVis==1,],family=binomial)
+(summary(m3))
+se <- sqrt(diag(vcov(m3))) # getting the standard errors for CI estimation
+( tab <- cbind(Est=fixef(m3),LL=fixef(m3)-1.96*se,UL=fixef(m3)+1.96*se) )
+( coefs <- coef(m3)$subjID )
+( ranefs <- ranef(m3)$subjID )
+
+# coefs <- ddply(wows, .(subjID), function(wows) {
+#   m <- lm(correct~singlCont, data=wows)
+#   data.frame(a = coef(wows)[1], b = coef(wows)[2])
+# })
+
+# ggplot(data=sumAcc[sumAcc$respSubjVis==1,], aes(x=singlCont, y=da)) + 
+#   geom_point(stat='identity',position='dodge',aes(size=ave),alpha=.7) +
+#   geom_abline(data=coefs, aes(intercept=Intercept, slope=singlCont))
+
+# Visible trials
+m4 <- glmer(correct~0+singlCont+(singlCont|subjID),
+            data=wows[wows$respSubjVis==4,],family=binomial)
+(summary(m4))
+se <- sqrt(diag(vcov(m4))) # getting the standard errors for CI estimation
+( tab <- cbind(Est=fixef(m4),LL=fixef(m4)-1.96*se,UL=fixef(m4)+1.96*se) )
+( coef(m4)$subjID )
+```

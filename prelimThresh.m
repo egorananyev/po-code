@@ -1,4 +1,4 @@
-function prelimThresh(subj, domEye)
+function prelimThresh(subj, domEye, greenRgb)
 %% A function to evaluate preliminary visibility threshold for a pop-out/no-pop-out displays.
 %subj = 1001;
 %domEye = 0; % 0=right, 1=left
@@ -10,7 +10,7 @@ condFileName = 'po-prelimThresh';
 gabPhase = 0; % pase of underlying sine grating in degrees
 sc = 5; % spatial constant of the exponential "hull"
 radius = 70; % for Gabor arrangement
-greenRgb = 165; % find this value through equiluminance testing
+% greenRgb = 165; % find this value through equiluminance testing
 redRgb = 255;
 rfcMax = 2;
 rfcSvs = 5; % response frame counter to register only one key press in so many frames
@@ -39,7 +39,7 @@ outFileName = strcat('../po-thresh/', sessionName);
 % textTiltFdbLeft = ' \n \n \n<- (left)\n ';
 % textTiltFdbRight = ' \n \n \n \n-> (right)';
 textTilt = ' ';
-textSubjVis = '1. no experience\n2. brief glimpse\n3. almost clear\n4. clear experience';
+textSubjVis = '1. saw no circles\n2. dim, only few \n3. dim, almost all\n4. dim, saw all';
 textInstr = 'Press\nany button\nto start';
 textNextTrial = 'Press spacebar\nto continue';
 
@@ -171,7 +171,7 @@ Priority(priorityLevel);
 
 
 %% Preparing the Mondrian files.
-mondFiles    = dir('mondrians/');
+mondFiles    = dir('mondrians_coloured/');
 mondFileIds  = find(~[mondFiles.isdir]);
 mondFileIds2 = mondFileIds;
 for k=1:length(mondFileIds) % some checks, I guess
@@ -183,7 +183,7 @@ end
 % reopen the files on the fly):
 mondImg = cell(1,length(mondFileIds2));
 for k=1:length(mondFileIds2)
-    mondImg{k} = imread(['mondrians/' mondFiles(mondFileIds2(k)).name]);
+    mondImg{k} = imread(['mondrians_coloured/' mondFiles(mondFileIds2(k)).name]);
 end
 
 %% Going through the staircases (running the trials).
@@ -235,6 +235,7 @@ for blockTrial=1:numofStaircs
     d.postStimBlankT(c) = c2n(condTable,'postStimBlankT',d.curStairc(c));
     d.maskRR(c) = c2n(condTable,'maskRR',d.curStairc(c));
     d.maskOnOff(c) = c2n(condTable,'maskOnOff',d.curStairc(c));
+    d.maskRamp(c) = c2n(condTable,'maskRamp',d.curStairc(c));
     
     % Gabor settings:
     d.gabNum(c) = c2n(condTable,'gabNum',d.curStairc(c)); % number of Gabors
@@ -466,6 +467,13 @@ for blockTrial=1:numofStaircs
         %% Tail
         % Mask:
         if curFrame<=(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)) && d.maskOnOff(c)
+            % Mask ramp?
+            if d.maskRamp(c)
+                curMaskContr = (curFrame/(d.jitFC(c)+d.stimFC(c)+d.postStimBlankFC(c)))*...
+                    d.maskContr(c);
+            else
+                curMaskContr = d.maskContr(c);
+            end
             % Alternating frequency is set by maskRR (refresh rate):
             if rem(curFrame,d.maskRR(c))==0
                 mondIndx = mondIndx + 1;
@@ -475,7 +483,7 @@ for blockTrial=1:numofStaircs
             end
             % Drawing the mask based on the Mondrean index:
             drawMondrians(mondImg{mondIndx}, wPtr, ...
-                disp.centX(2-domEye), disp.centY, disp.boxSize, d.maskContr(c));
+                disp.centX(2-domEye), disp.centY, disp.boxSize, curMaskContr);
         end
         % Fixation boxes:
         drawFixationBox(wPtr, disp.centX(1), disp.centY, disp.boxSize, ...

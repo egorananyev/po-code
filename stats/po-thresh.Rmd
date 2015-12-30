@@ -11,7 +11,7 @@ library(plyr)
 library(ggplot2)
 #library('R.matlab')
 dataDir = '~/Dropbox/Projects/po/po-thresh/'
-inFileName = 'po-prelimThresh_s1002_d0_2015-11-17_150923'
+inFileName = 'po-prelimThresh_s1003_d0_2015-11-18_150619'
 ws = read.csv(paste(dataDir,inFileName,'.csv',sep=''))
 inColNames = read.csv(paste(dataDir,inFileName,'_colNames.csv',sep=''),
                       header=F)

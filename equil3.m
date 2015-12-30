@@ -11,13 +11,25 @@ function equil3
 
 
 % OPEN WINDOW ---------------------------------------------------
-screenNo = min(Screen('Screens'));
+screenNo = max(Screen('Screens'));
 white = WhiteIndex(screenNo);
 black = BlackIndex(screenNo);
 grey = white/2;
 fixPoint = 4;
 
-numMultiSamples = 4;
+% Keyboard
+KbName('UnifyKeyNames');
+targetUsageName = 'Keyboard'; % change accordingly
+targetProduct = 'Dell USB Keyboard'; % change accordingly
+% targetProduct = 'Apple Keyboard'; % temp
+dev = PsychHID('Devices');
+deviceIndex = find(strcmpi(targetUsageName, {dev.usageName}) & ...
+    strcmpi(targetProduct, {dev.product}));
+% deviceIndex = -3;
+KbQueueCreate(deviceIndex);
+KbQueueStart(deviceIndex);
+
+% numMultiSamples = 4;
 % [window, windowRect] = PsychImaging('OpenWindow', ...
 %     screenNo, black, [0 0 1920 1080], 32, 2,[], numMultiSamples, []);
 [window, windowRect] = Screen('OpenWindow', screenNo, black);
@@ -46,11 +58,14 @@ delay = flipInterval/2;
 disp('Test begin')
 DrawFormattedText(window,'Trials\n\nPress Any Key to Start','center','center',grey);
 Screen('Flip', window);
-KbStrokeWait;
+KbStrokeWait(deviceIndex);
 
 %Initial rects
-red = [255 0 0];
-green = [0 165 0];
+red = [round(255*0.05) 0 0];
+green = [round(255*0.05*.89) round(255*0.05) 0];
+% green = [round(165*.89) round(165*.11) 0];
+% green = [round(165*.78) round(165*.22) 0];
+% green = [round(165*.53) round(165*.47) 0];
 baseRect = [0 0 100 100];
 allRects= CenterRectOnPointd(baseRect,xCenter,yCenter);
 loopFlag = 1;
@@ -59,7 +74,7 @@ vbl = Screen('Flip',window);
 %                        EXPERIMENT LOOP
 %----------------------------------------------------------------
 while loopFlag
-    [keyIsDown, secs, keyCode] = KbCheck;
+    [keyIsDown, secs, keyCode] = KbCheck(deviceIndex);
     for m1 = 1:4
         Screen('FillRect', window, green, allRects);
         vbl = Screen('Flip',window,vbl+delay);
@@ -79,9 +94,9 @@ while loopFlag
             sca;
             return;
         elseif keyCode(slowKey)
-            green = green - [0 2 0];
+            green = green - [0 1 0];
         elseif keyCode(fastKey)
-            green = green + [0 2 0] ;
+            green = green + [0 1 0] ;
         elseif keyCode (equalKey)
             loopFlag = 0;
             disp('E');
@@ -101,7 +116,7 @@ DrawFormattedText(window,...
     'Press Any Key To Exit',...
     'center', 'center', grey);
 Screen('Flip', window);
-KbStrokeWait;
+KbStrokeWait(deviceIndex);
 sca;
 disp('Test ends.')
 

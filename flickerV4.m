@@ -1,24 +1,37 @@
+function flickerV4(grbVal)
+
 % Flicker photometry, sine wave flicker
 
 % BASIC SETUPS --------------------------------------------------
-clear all;
-close all;
-sca;
-HideCursor;
-commandwindow;
-PsychDefaultSetup(2);
+% clear all;
+% close all;
+% sca;
+% HideCursor;
+% commandwindow;
+% PsychDefaultSetup(1);
 
+% Screen('Preference', 'SkipSyncTests', 1); % a necessary evil - only for Yosemite
 
 % OPEN WINDOW ---------------------------------------------------
-screenNo = max(Screen('Screens'));
+Screen('Screens')
+screenNo = min(Screen('Screens'));
 white = WhiteIndex(screenNo);
 black = BlackIndex(screenNo);
 grey = white/2;
 fixPoint = 4;
 
-numMultiSamples = 4;
-[window, windowRect] = PsychImaging('OpenWindow', ...
-    screenNo, black, [0 0 1920 1080], 32, 2,[], numMultiSamples, []);
+% Keyboard
+KbName('UnifyKeyNames');
+quitkey = 'c';
+deviceIndex = -3;
+KbQueueCreate(deviceIndex);
+KbQueueStart(deviceIndex);
+
+% numMultiSamples = 4;
+% [window, windowRect] = PsychImaging('OpenWindow', ...
+%     screenNo, black, [0 0 1920 1080], 32, 2,[], numMultiSamples, []);
+[window, windowRect] = Screen('OpenWindow', screenNo, black, ...
+    [0 0 1920 1080]); %, 32, 2,[], numMultiSamples, []);
 Screen('Flip', window);
 flipInterval = Screen('GetFlipInterval',window);
 [xCenter, yCenter] = RectCenter(windowRect);
@@ -31,8 +44,10 @@ Screen('BlendFunction', window, ...
 
 
 escapeKey = KbName('ESCAPE');
-fastKey = KbName('RightArrow');
-slowKey = KbName('LeftArrow');
+% fastKey = KbName('RightArrow');
+% slowKey = KbName('LeftArrow');
+slowKey = KbName('RightArrow');
+fastKey = KbName('LeftArrow');
 equalKey = KbName('DownArrow');
 
 %TIME -----------------------------------------------------------
@@ -44,13 +59,13 @@ delay = flipInterval/2;
 disp('Test begin')
 DrawFormattedText(window,'Trials\n\nPress Any Key to Start','center','center',grey);
 Screen('Flip', window);
-KbStrokeWait;
+KbStrokeWait(deviceIndex);
 
 loopFlag = 1;
 
 %Setup parameters
-redLum = 30;   %RGB value
-greenLum = 30;
+redLum = grbVal;   %RGB value
+greenLum = grbVal;
 m = 0.5;
 fs =0.01;  %spatial frenquency 
 ft = 15; %temporal frequency
@@ -75,14 +90,17 @@ while loopFlag
     end
     R = repmat(red,100,1);
     G = repmat(green,100,1);
-    R = R/255;  %rescaling
-    G = G/255;
+%     R = R/255;  %rescaling
+%     G = G/255;
     RGB(:,:,1)=R;
     RGB(:,:,2)=G;
+%     RGB(1:10,1:10,1)
+%     RGB(1:10,1:10,2)
+%     RGB(1:10,1:10,3)
     Screen('Close',RGBTexture);
     RGBTexture = Screen('MakeTexture', window, RGB);
-    Screen('DrawTextures', window, RGBTexture, [],...
-    dstRects);
+    Screen('DrawTextures', window, RGBTexture, [], dstRects);
+%     Screen('DrawTextures', window, RGBTexture);
     vbl = Screen('Flip',window,vbl+delay);
     
     if keyCode(escapeKey)||keyCode(slowKey)||keyCode(fastKey)||keyCode(equalKey)
@@ -92,12 +110,14 @@ while loopFlag
             sca;
             return;
         elseif keyCode(slowKey)
-            redLum = redLum - 0.1;
+            redLum = redLum - 1;
         elseif keyCode(fastKey)
-            redLum = redLum + 0.1 ;
+            redLum = redLum + 1 ;
         else
             loopFlag = 0;
             disp('E');
+            disp(redLum);
+            disp(greenLum);
             break;
         end
     end
@@ -111,8 +131,10 @@ DrawFormattedText(window,...
     'Press Any Key To Exit',...
     'center', 'center', grey);
 Screen('Flip', window);
-KbStrokeWait;
+KbStrokeWait(deviceIndex);
 sca;
 disp('Test ends.')
 
 %===============================END=============================
+
+end

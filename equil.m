@@ -1,4 +1,4 @@
-function po(subj, domEye, greenRgb)
+function equil(subj, domEye)
 % subj = 1001;
 % domEye = 0; % 0=right, 1=left
 

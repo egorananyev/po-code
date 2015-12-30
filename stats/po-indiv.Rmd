@@ -10,8 +10,9 @@ output: html_document
 library(plyr)
 library(ggplot2)
 #library('R.matlab')
-dataDir = '~/Dropbox/Projects/po/po-data/'
-inFileName = 'po-cond01_s1001_d0_2015-11-19_163939'
+dataDir <- '~/Dropbox/Projects/po/po-data/'
+# dataDir <- 'C:/Users/Egor/Dropbox/Projects/po/po-data/'
+inFileName = 'po-cond01_s1001_d0_2015-12-02_182532'
 ws = read.csv(paste(dataDir,inFileName,'.csv',sep=''))
 inColNames = read.csv(paste(dataDir,inFileName,'_colNames.csv',sep=''),
                       header=F)
@@ -48,11 +49,7 @@ sumUnSeen[sumUnSeen$contr>0 & sumUnSeen$unSeen=='seen',]
 table(ws$curStairc)
 # The number of trials should be balanced across primed vs. unprimed locations
 # for the different levels of singleton contrast (pop-out salience):
-ddply(ws, .(singlCont, odtLoc), summarise, numTrials=length(curStairc))
-
-###############################################################################
-
-
+ddply(ws[ws$contr>0,], .(singlCont, odtLoc), summarise, numTrials=length(curStairc))
 ```
 
 # Visibility scores
@@ -66,8 +63,11 @@ ggplot(data=ws, aes(x=xpos, y=contr, color=curStairc)) + geom_line() +
 # Accuracy on ODT
 ```{r, fig.width=10}
 ws$correct <- 0
-ws$correct[ws$respOdt==1 & ws$odtTiltOffset==1.5] <- 1
-ws$correct[ws$respOdt==2 & ws$odtTiltOffset==-1.5] <- 1
+ws$correct[ws$respOdt==1 & ws$odtOri==0] <- 1 #left
+ws$correct[ws$respOdt==2 & ws$odtOri==1] <- 1 #right
+# The number of right and left responses (i.e., is there a strong bias?)
+# 1 = left; 2 = right
+( ddply(ws, .(respOdt), summarise, numofResp=length(respOdt)) )
 # Accuracy as a fn of ODT location and tilt:
 sumAccLoc <- ddply(ws, .(odtID), summarise, accLoc=mean(correct), 
                    numTrials=length(correct), numPrim=sum(odtLoc==0)/length(odtLoc))
@@ -78,27 +78,37 @@ sumAccTilt <- ddply(ws, .(odtTiltOffset), summarise, accLoc=mean(correct),
 # Showing the accuracy for each level of subjective visibility (no contrast matching)
 # The difference between 6 (opposite ODT location) and 0 (same location) is the
 # pop-out benefit:
-sumAccPrim <- ddply(ws[ws$odtLoc==0 & ws$contr2>0,], .(respSubjVis,singlCont),
+sumAccPrim <- ddply(ws[ws$odtLoc==0 & ws$contr2>0.009,], .(respSubjVis,singlCont),
                 summarise, accPrim=mean(correct), numTrialsPrim=length(correct))
-sumAccUnpr <- ddply(ws[ws$odtLoc==1 & ws$contr2>0,], .(respSubjVis,singlCont),
+sumAccUnpr <- ddply(ws[ws$odtLoc!=0 & ws$contr2>0.009,], .(respSubjVis,singlCont),
                 summarise, accUnpr=mean(correct), numTrialsUnpr=length(correct))
 sumAcc <- merge(sumAccPrim, sumAccUnpr, by=c('respSubjVis','singlCont'))
 sumAcc$da <- sumAcc$accPrim - sumAcc$accUnpr
-( sumAcc )
 sumAcc$singlCont <- as.factor(sumAcc$singlCont)
 sumAcc$respSubjVis <- as.factor(sumAcc$respSubjVis)
 # Plotting the benefit:
-ggplot(data=sumAcc, aes(x=singlCont, y=da, fill=singlCont)) + geom_bar(stat='identity') +
-  facet_grid(.~respSubjVis) + scale_fill_brewer()
+ggplot(data=sumAcc, aes(x=singlCont, y=da, fill=singlCont)) + 
+  geom_bar(stat='identity',position='dodge') + facet_grid(.~respSubjVis) + 
+  scale_fill_brewer() + 
+  labs(x='Pop-out salience', y='Priming accuracy benefit (%)', fill='Pop-out salience',
+    title='Priming benefit on ODT performance')
 # A long table:
-sumAccAll <- ddply(ws[ws$contr2>0,], .(respSubjVis,singlCont,odtLoc),
+sumAccAll <- ddply(ws[ws$contr2>0.009,], .(respSubjVis,singlCont,odtLoc),
                    summarise, acc=mean(correct), numTrials=length(correct))
 sumAccAll$singlCont <- as.factor(sumAccAll$singlCont)
 sumAccAll$respSubjVis <- as.factor(sumAccAll$respSubjVis)
 # Visualizing the relative frequency of types of trials:
 ggplot(data=sumAccAll, aes(x=singlCont, y=numTrials, fill=singlCont)) + 
-  geom_bar(stat='identity') + facet_grid(.~respSubjVis) + scale_fill_brewer()
-# A more detailed plot
+  geom_bar(stat='identity') + facet_grid(.~respSubjVis) + scale_fill_brewer() +
+  theme_bw() + labs(x='Pop-out salience', y='Number of trials', fill='Pop-out salience',
+    title='Frequency of trials per visibility')
+# Plotting the accuracies separately:
+ggplot(data=sumAccAll, aes(x=singlCont, y=acc, group=factor(odtLoc), 
+                           fill=factor(odtLoc))) + 
+  geom_bar(stat='identity', width=0.5, position='dodge') + 
+  facet_grid(.~respSubjVis) + theme_bw() + 
+  labs(x='Pop-out salience/Visibility', y='Accuracy on ODT', fill='Unprimed',
+    title='Accuracy per pop-out salience & visibility')
 # Accurate and inaccurate trials
 sumAccTrials <- ddply(ws[ws$contr2>0,], .(respSubjVis,singlCont,odtLoc,correct),
                    summarise, numTrials=length(correct))
@@ -107,27 +117,10 @@ sumAccTrials$respSubjVis <- as.factor(sumAccTrials$respSubjVis)
 sumAccTrials$odtLoc <- as.factor(sumAccTrials$odtLoc)
 sumAccTrials$correct <- as.factor(sumAccTrials$correct)
 # Plotting frequencies of correct/incorrect trials for each visibility score:
-ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==1,],
-       aes(x=odtLoc, y=numTrials, fill=correct)) + 
-  geom_bar(stat='identity') + facet_grid(.~singlCont)
-ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==2,],
-       aes(x=odtLoc, y=numTrials, fill=correct)) + 
-  geom_bar(stat='identity') + facet_grid(.~singlCont)
-ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==3,],
-       aes(x=odtLoc, y=numTrials, fill=correct)) + 
-  geom_bar(stat='identity') + facet_grid(.~singlCont)
-ggplot(data=sumAccTrials[sumAccTrials$respSubjVis==4,],
-       aes(x=odtLoc, y=numTrials, fill=correct)) + 
-  geom_bar(stat='identity') + facet_grid(.~singlCont)
-```
-
-# Matching contrast
-```{r}
-# Finding *precise* matches across contrasts:
-unseenContr <- sumUnSeen$contr[sumUnSeen$unSeen=='unseen' & sumUnSeen$contr>0]
-( unseenContr ) # these are the contrasts of unseen, non-zero contrast trials
-# Displaying the number of matches found for the seen and unseen trials:
-contrMatches <- sumUnSeen$contr[sumUnSeen$unSeen=='seen'] %in% unseenContr
-( sum(contrMatches) ) # number of contrast matches
-( sumUnSeen$unSeenCount[contrMatches] ) # number of seen/unseen trials
+ggplot(data=sumAccTrials, aes(x=singlCont, y=numTrials, group=factor(correct), 
+                           fill=factor(correct))) + 
+  geom_bar(stat='identity', width=0.5, position='dodge') + 
+  facet_grid(.~respSubjVis) + scale_fill_manual(values=c("#CC6666", "#9999CC")) +
+  theme_bw() + labs(x='Pop-out salience/Visibility', y='Accuracy on ODT',fill='Correct',
+    title='Correct/incorrect trials per pop-out salience & visibility')
 ```
